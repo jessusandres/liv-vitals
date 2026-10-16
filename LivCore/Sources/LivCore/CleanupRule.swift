@@ -1,0 +1,127 @@
+import Foundation
+
+/// One kind of removable clutter and where to find it.
+public struct CleanupRule: Sendable, Identifiable {
+    public let id: String
+    public let category: CleanupCategory
+    /// Paths relative to the home folder. `*` stands for exactly one path component and may appear in
+    /// any of them, e.g. `Library/Application Support/Google/Chrome/*/Code Cache`.
+    public let patterns: [String]
+    /// Names (last component only; `*` and `?` allowed, case-insensitive) that are never matched.
+    public let excluding: [String]
+    /// Only items not modified for this long are matched.
+    public let minAge: Duration?
+    public let defaultSelected: Bool
+    /// Rules whose folders macOS protects: they are not even listed without Full Disk Access.
+    public let requiresFullDiskAccess: Bool
+    /// Apps this clutter belongs to. While one runs, its items start unchecked with a note.
+    public let ownerBundleIDs: [String]
+
+    public init(
+        id: String,
+        category: CleanupCategory,
+        patterns: [String],
+        excluding: [String] = [],
+        minAge: Duration? = nil,
+        defaultSelected: Bool = true,
+        requiresFullDiskAccess: Bool = false,
+        ownerBundleIDs: [String] = []
+    ) {
+        self.id = id
+        self.category = category
+        self.patterns = patterns
+        self.excluding = excluding
+        self.minAge = minAge
+        self.defaultSelected = defaultSelected
+        self.requiresFullDiskAccess = requiresFullDiskAccess
+        self.ownerBundleIDs = ownerBundleIDs
+    }
+}
+
+extension CleanupRule {
+    private static let day = Duration.seconds(86_400)
+
+    /// The built-in catalog. Order matters: when two rules reach the same folder the first one wins, so the
+    /// specific rules come before `user-caches`, which also steps around any folder that holds a match of an
+    /// earlier rule (see `CleanupRuleEngine`).
+    ///
+    /// Every rule is something an app or tool rebuilds by itself. None reaches into app containers,
+    /// preferences, documents or `Application Support` data, and each carries a line on why it is safe.
+    public static let builtIn: [CleanupRule] = [
+        // Xcode's own cache. The one `com.apple.*` cache reviewed as safe: Xcode recreates it on demand.
+        CleanupRule(id: "xcode-caches", category: .developerTools, patterns: ["Library/Caches/com.apple.dt.Xcode"]),
+
+        // Safari's cache sits behind Full Disk Access. Pages are simply fetched again.
+        CleanupRule(
+            id: "safari-cache", category: .browserData, patterns: ["Library/Caches/com.apple.Safari"],
+            requiresFullDiskAccess: true, ownerBundleIDs: ["com.apple.Safari"]
+        ),
+
+        // Only the cache folders of each Chrome profile: never history, cookies, logins or extensions.
+        CleanupRule(
+            id: "chrome-cache", category: .browserData,
+            patterns: [
+                "Library/Caches/Google/Chrome/*/Cache",
+                "Library/Application Support/Google/Chrome/*/Code Cache",
+                "Library/Application Support/Google/Chrome/*/GPUCache",
+            ],
+            ownerBundleIDs: ["com.google.Chrome"]
+        ),
+
+        // Firefox's disk cache per profile; profiles, bookmarks and passwords live elsewhere.
+        CleanupRule(
+            id: "firefox-cache", category: .browserData,
+            patterns: ["Library/Caches/Firefox/Profiles/*/cache2"],
+            ownerBundleIDs: ["org.mozilla.firefox"]
+        ),
+
+        // Homebrew's download cache is rebuilt by the next install. `downloads` is left for Installers.
+        CleanupRule(
+            id: "homebrew-cache", category: .developerTools,
+            patterns: ["Library/Caches/Homebrew/*"], excluding: ["downloads"]
+        ),
+
+        // pnpm's content store: packages are fetched again on the next install. It shares files with
+        // projects through hard links, so the app unchecks it when most of its size is shared.
+        CleanupRule(id: "pnpm-store", category: .developerTools, patterns: ["Library/pnpm/store", "Library/Caches/pnpm"]),
+
+        // Package-manager and build caches that tools repopulate on demand.
+        CleanupRule(id: "yarn-cache", category: .developerTools, patterns: ["Library/Caches/Yarn"]),
+        CleanupRule(id: "pip-cache", category: .developerTools, patterns: ["Library/Caches/pip"]),
+        CleanupRule(id: "go-build-cache", category: .developerTools, patterns: ["Library/Caches/go-build"]),
+        CleanupRule(id: "cocoapods-cache", category: .developerTools, patterns: ["Library/Caches/CocoaPods"]),
+
+        // Per-app caches. `com.apple.*` stays out: macOS keeps services' state there and some caches
+        // break features when removed. Safe exceptions get their own rule above.
+        CleanupRule(id: "user-caches", category: .userCaches, patterns: ["Library/Caches/*"], excluding: ["com.apple.*"]),
+
+        // Xcode's build products and indexes are regenerated by the next build.
+        CleanupRule(
+            id: "derived-data", category: .developerTools,
+            patterns: ["Library/Developer/Xcode/DerivedData/*"], ownerBundleIDs: ["com.apple.dt.Xcode"]
+        ),
+
+        // Archives can be the only copy of a build meant for release: shown, never preselected.
+        CleanupRule(id: "xcode-archives", category: .developerTools, patterns: ["Library/Developer/Xcode/Archives/*"], defaultSelected: false),
+
+        // Symbols for old device versions are downloaded again when a device connects; only the old ones.
+        CleanupRule(
+            id: "device-support", category: .developerTools,
+            patterns: ["Library/Developer/Xcode/iOS DeviceSupport/*"], minAge: day * 90, defaultSelected: false
+        ),
+
+        CleanupRule(id: "simulator-caches", category: .developerTools, patterns: ["Library/Developer/CoreSimulator/Caches/*"]),
+        CleanupRule(id: "npm-cache", category: .developerTools, patterns: [".npm/_cacache"]),
+        CleanupRule(id: "gradle-caches", category: .developerTools, patterns: [".gradle/caches"]),
+
+        // Crash reports older than a week: already sent or no longer useful.
+        CleanupRule(id: "diagnostic-reports", category: .logs, patterns: ["Library/Logs/DiagnosticReports/*"], minAge: day * 7),
+
+        // App logs. `DiagnosticReports` has its own age rule above.
+        CleanupRule(id: "user-logs", category: .logs, patterns: ["Library/Logs/*"], excluding: ["DiagnosticReports"]),
+
+        // What is already in the Trash. Removing it is permanent, so it is never preselected, and macOS
+        // protects the folder, so it needs Full Disk Access.
+        CleanupRule(id: "trash", category: .trash, patterns: [".Trash/*"], defaultSelected: false, requiresFullDiskAccess: true),
+    ]
+}

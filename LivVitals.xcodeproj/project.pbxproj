@@ -1,0 +1,620 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0FBC1B364B742EA50A41A443 /* LivWidgetsUI in Frameworks */ = {isa = PBXBuildFile; productRef = 64C0B749D012576C5EDF408F /* LivWidgetsUI */; };
+		601F7DED8B15B321906B74C4 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49AD97F4D4EFA68332441824 /* Cocoa.framework */; };
+		609A585ADF99065E7509495B /* LivCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4ED2CB52276CC45D20204155 /* LivCore */; };
+		60BF72E71E3ED21A875CBAC1 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49AD97F4D4EFA68332441824 /* Cocoa.framework */; };
+		A1C0000000000000000000A1 /* LivCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1C0000000000000000000A2 /* LivCore */; };
+		C35FB5217B73BFD2BA901C5C /* LivVitalsWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2CD694D1B0E4BBC5E2F897E3 /* LivVitalsWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, CodeSignOnCopy, ); }; };
+		DBA4CF940BE5AD0A7E03CCF8 /* LivCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2A580FD2AF6E10BBF362AE2A /* LivCore */; };
+		EA67DE6F01109C23AD3F0E72 /* LivWidgetsUI in Frameworks */ = {isa = PBXBuildFile; productRef = 2C6F62E2F52E0E1F1C84CC30 /* LivWidgetsUI */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B19F09540CE05065AC64D7AC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1C00000000000000000000B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C4EDE6070DF8653EDAC5A33;
+			remoteInfo = LivVitalsWidgets;
+		};
+		D162A89B05347F7AA9326629 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1C00000000000000000000B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1C000000000000000000012;
+			remoteInfo = LivVitals;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B0827BF0DD52B8CF73380173 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C35FB5217B73BFD2BA901C5C /* LivVitalsWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		2CD694D1B0E4BBC5E2F897E3 /* LivVitalsWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LivVitalsWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		49AD97F4D4EFA68332441824 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		A1C000000000000000000003 /* LivVitals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LivVitals.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B923A2DCC5F66CDF87F83639 /* LivVitalsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LivVitalsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A1C000000000000000000005 /* LivVitals */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = LivVitals;
+			sourceTree = "<group>";
+		};
+		BC0ADEFD5D36E96E0C165E95 /* LivVitalsTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = LivVitalsTests;
+			sourceTree = "<group>";
+		};
+		F17C90E923AFF487A7C788C7 /* LivVitalsWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = LivVitalsWidgets;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		957D0BCCD027DDFA92C97EA6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				60BF72E71E3ED21A875CBAC1 /* Cocoa.framework in Frameworks */,
+				DBA4CF940BE5AD0A7E03CCF8 /* LivCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1C000000000000000000010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1C0000000000000000000A1 /* LivCore in Frameworks */,
+				EA67DE6F01109C23AD3F0E72 /* LivWidgetsUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D19F52D90B7381C89DBADAA4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				601F7DED8B15B321906B74C4 /* Cocoa.framework in Frameworks */,
+				609A585ADF99065E7509495B /* LivCore in Frameworks */,
+				0FBC1B364B742EA50A41A443 /* LivWidgetsUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		83941DAE2D43864F986C989C /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				49AD97F4D4EFA68332441824 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		86671B5FC750A13BD2BD20E0 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				83941DAE2D43864F986C989C /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A1C000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1C000000000000000000003 /* LivVitals.app */,
+				B923A2DCC5F66CDF87F83639 /* LivVitalsTests.xctest */,
+				2CD694D1B0E4BBC5E2F897E3 /* LivVitalsWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1C00000000000000000000A = {
+			isa = PBXGroup;
+			children = (
+				A1C000000000000000000005 /* LivVitals */,
+				A1C000000000000000000004 /* Products */,
+				86671B5FC750A13BD2BD20E0 /* Frameworks */,
+				BC0ADEFD5D36E96E0C165E95 /* LivVitalsTests */,
+				F17C90E923AFF487A7C788C7 /* LivVitalsWidgets */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0C4EDE6070DF8653EDAC5A33 /* LivVitalsWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 688CBDA21D8ACAB4794599E6 /* Build configuration list for PBXNativeTarget "LivVitalsWidgets" */;
+			buildPhases = (
+				9321A3162A052DCFBC5129E6 /* Sources */,
+				D19F52D90B7381C89DBADAA4 /* Frameworks */,
+				1660F97E41C4BC26239E417F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F17C90E923AFF487A7C788C7 /* LivVitalsWidgets */,
+			);
+			name = LivVitalsWidgets;
+			packageProductDependencies = (
+				4ED2CB52276CC45D20204155 /* LivCore */,
+				64C0B749D012576C5EDF408F /* LivWidgetsUI */,
+			);
+			productName = LivVitalsWidgets;
+			productReference = 2CD694D1B0E4BBC5E2F897E3 /* LivVitalsWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A1C000000000000000000012 /* LivVitals */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1C00000000000000000001E /* Build configuration list for PBXNativeTarget "LivVitals" */;
+			buildPhases = (
+				A1C00000000000000000000F /* Sources */,
+				A1C000000000000000000010 /* Frameworks */,
+				A1C000000000000000000011 /* Resources */,
+				B0827BF0DD52B8CF73380173 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CD699CF6F746DE61B0305CE3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1C000000000000000000005 /* LivVitals */,
+			);
+			name = LivVitals;
+			packageProductDependencies = (
+				A1C0000000000000000000A2 /* LivCore */,
+				2C6F62E2F52E0E1F1C84CC30 /* LivWidgetsUI */,
+			);
+			productName = LivVitals;
+			productReference = A1C000000000000000000003 /* LivVitals.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D0F6B3BBF860F794D49E18A2 /* LivVitalsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1392B439DA98757F2D49FF8 /* Build configuration list for PBXNativeTarget "LivVitalsTests" */;
+			buildPhases = (
+				A2344C17FE4229023D8DD6F4 /* Sources */,
+				957D0BCCD027DDFA92C97EA6 /* Frameworks */,
+				4FD6B49958C0E6138D578614 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E2C349C01C630504600D6225 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BC0ADEFD5D36E96E0C165E95 /* LivVitalsTests */,
+			);
+			name = LivVitalsTests;
+			packageProductDependencies = (
+				2A580FD2AF6E10BBF362AE2A /* LivCore */,
+			);
+			productName = LivVitalsTests;
+			productReference = B923A2DCC5F66CDF87F83639 /* LivVitalsTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1C00000000000000000000B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					A1C000000000000000000012 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = A1C00000000000000000000E /* Build configuration list for PBXProject "LivVitals" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1C00000000000000000000A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A1C0000000000000000000A3 /* XCLocalSwiftPackageReference "LivCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A1C000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1C000000000000000000012 /* LivVitals */,
+				D0F6B3BBF860F794D49E18A2 /* LivVitalsTests */,
+				0C4EDE6070DF8653EDAC5A33 /* LivVitalsWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1660F97E41C4BC26239E417F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4FD6B49958C0E6138D578614 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1C000000000000000000011 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9321A3162A052DCFBC5129E6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1C00000000000000000000F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2344C17FE4229023D8DD6F4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CD699CF6F746DE61B0305CE3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LivVitalsWidgets;
+			target = 0C4EDE6070DF8653EDAC5A33 /* LivVitalsWidgets */;
+			targetProxy = B19F09540CE05065AC64D7AC /* PBXContainerItemProxy */;
+		};
+		E2C349C01C630504600D6225 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LivVitals;
+			target = A1C000000000000000000012 /* LivVitals */;
+			targetProxy = D162A89B05347F7AA9326629 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		45203749F55F3E14D0AEB7D5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6985SV5Y32;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.asger.LivVitalsTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LivVitals.app/Contents/MacOS/LivVitals";
+			};
+			name = Release;
+		};
+		67566755C64FDDABCBCD6627 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = LivVitalsWidgetsSupport/LivVitalsWidgets.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6985SV5Y32;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LivVitalsWidgetsSupport/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.asger.LivVitals.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		A1C00000000000000000001C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1C00000000000000000001D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A1C00000000000000000001F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6985SV5Y32;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Liv Vitals";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.asger.LivVitals;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A1C000000000000000000020 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6985SV5Y32;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Liv Vitals";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.asger.LivVitals;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		C98A7A474A4E19EABCB8AC36 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6985SV5Y32;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.asger.LivVitalsTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LivVitals.app/Contents/MacOS/LivVitals";
+			};
+			name = Debug;
+		};
+		FC71E9243563F93C5C58BE0B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = LivVitalsWidgetsSupport/LivVitalsWidgets.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6985SV5Y32;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LivVitalsWidgetsSupport/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.asger.LivVitals.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		688CBDA21D8ACAB4794599E6 /* Build configuration list for PBXNativeTarget "LivVitalsWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67566755C64FDDABCBCD6627 /* Release */,
+				FC71E9243563F93C5C58BE0B /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1C00000000000000000000E /* Build configuration list for PBXProject "LivVitals" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1C00000000000000000001C /* Debug */,
+				A1C00000000000000000001D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1C00000000000000000001E /* Build configuration list for PBXNativeTarget "LivVitals" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1C00000000000000000001F /* Debug */,
+				A1C000000000000000000020 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1392B439DA98757F2D49FF8 /* Build configuration list for PBXNativeTarget "LivVitalsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				45203749F55F3E14D0AEB7D5 /* Release */,
+				C98A7A474A4E19EABCB8AC36 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A1C0000000000000000000A3 /* XCLocalSwiftPackageReference "LivCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = LivCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2A580FD2AF6E10BBF362AE2A /* LivCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LivCore;
+		};
+		2C6F62E2F52E0E1F1C84CC30 /* LivWidgetsUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LivWidgetsUI;
+		};
+		4ED2CB52276CC45D20204155 /* LivCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LivCore;
+		};
+		64C0B749D012576C5EDF408F /* LivWidgetsUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LivWidgetsUI;
+		};
+		A1C0000000000000000000A2 /* LivCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LivCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A1C00000000000000000000B /* Project object */;
+}
