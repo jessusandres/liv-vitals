@@ -228,9 +228,9 @@ final class SpaceLensModel {
 
     private func forgetIssues(inside folder: URL) {
         let prefix = folder.path + "/"
-        let gone = issues.filter { $0.url.path == folder.path || $0.url.path.hasPrefix(prefix) }
-        issues.removeAll { issue in gone.contains { $0.url == issue.url } }
-        knownIssueURLs.subtract(gone.map(\.url))
+        func isInside(_ issue: ScanIssue) -> Bool { issue.url.path == folder.path || issue.url.path.hasPrefix(prefix) }
+        knownIssueURLs.subtract(issues.lazy.filter(isInside).map(\.url))
+        issues.removeAll(where: isInside)
     }
 
     // MARK: - Moving to the Trash

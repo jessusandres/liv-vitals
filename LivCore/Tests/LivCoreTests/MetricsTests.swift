@@ -307,6 +307,25 @@ struct MetricsMonitorTests {
         #expect(sampler.reads <= readsAtStop + 1)
     }
 
+    @Test func aSlowConsumerOnlyKeepsTheNewestSnapshot() async {
+        let sampler = ScriptedSampler()
+        let stream = MetricsMonitor.snapshots(sampler: sampler, every: .milliseconds(1))
+        // Nobody is listening yet; the sampler keeps producing.
+        for _ in 0..<400 where sampler.reads < 20 { try? await Task.sleep(for: .milliseconds(5)) }
+        let readsBeforeConsuming = sampler.reads
+        #expect(readsBeforeConsuming >= 20)
+        var received: [MetricsSnapshot] = []
+        for await snapshot in stream {
+            received.append(snapshot)
+            if received.count == 2 { break }
+        }
+        // Reading N is stamped N seconds after the epoch. Unbounded buffering would hand out reading 1 first;
+        // with only the newest kept, the first delivery comes from the backlog's tail.
+        #expect(received.count == 2)
+        #expect(received[0].date.timeIntervalSince(start) > 10)
+        #expect(received[1].date > received[0].date)
+    }
+
     @Test func aFailedReadingIsSkippedAndTheNextOneIsTried() async {
         let sampler = ScriptedSampler(failFirst: 2)
         var first: MetricsSnapshot?

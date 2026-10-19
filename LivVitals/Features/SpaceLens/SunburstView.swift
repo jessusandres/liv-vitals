@@ -42,12 +42,12 @@ struct SunburstView: View {
         return result
     }
 
-    private var centerNode: DiskNode {
-        hovered.flatMap { root.node(at: $0) } ?? root
-    }
-
     var body: some View {
-        GeometryReader { proxy in
+        // Laid out once per render and the hovered node resolved once: from the drawn segments first (what the ring
+        // hover sets), and only for a list row that is not drawn (a sliver or a deeper level) by walking the tree.
+        let segments = self.segments
+        let centerNode = hovered.flatMap { url in segments.first { $0.node.url == url }?.node ?? root.node(at: url) } ?? root
+        return GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             ZStack {
                 ForEach(segments) { segment in

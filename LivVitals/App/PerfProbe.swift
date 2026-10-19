@@ -6,7 +6,7 @@ import os
 
 /// Read-only timing probe: `LivVitals -LivPerfProbe <cleanup|smartcare|spacelens|uninstaller> [-LivPerfRuns 2]` runs one
 /// scan with the real services, prints one JSON line per run (seconds, files visited, items found, the longest time the
-/// main thread did not answer) and quits. Peak memory comes from `/usr/bin/time -l` around the whole process.
+/// main thread did not answer, plus `ok` and, on failure, `error`) and quits with status 1 when any run failed. Peak memory comes from `/usr/bin/time -l` around the whole process.
 /// `scripts/perf-probe.sh` builds it (Release with `-DPERF_PROBE`) and runs the three scenarios. It changes nothing on disk.
 enum PerfProbe {
     static func runIfRequested() {
@@ -15,24 +15,28 @@ enum PerfProbe {
         Task { @MainActor in
             let stalls = StallMonitor()
             stalls.start()
+            var failed = false
             for run in 1...runs {
                 stalls.reset()
                 let result = await measure(scenario)
-                let line: [String: Any] = [
+                if result.error != nil { failed = true }
+                var line: [String: Any] = [
                     "scenario": scenario,
                     "run": run,
                     "seconds": (result.seconds * 100).rounded() / 100,
                     "filesVisited": result.files,
                     "items": result.items,
                     "maxMainThreadStallMs": stalls.maxStallMilliseconds,
+                    "ok": result.error == nil,
                 ]
+                if let error = result.error { line["error"] = error }
                 if let data = try? JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]),
                    let text = String(data: data, encoding: .utf8) {
                     print(text)
                     fflush(stdout)
                 }
             }
-            exit(0)
+            exit(failed ? 1 : 0)
         }
     }
 
@@ -40,6 +44,7 @@ enum PerfProbe {
         var seconds: Double
         var files = 0
         var items = 0
+        var error: String?
     }
 
     private static func measure(_ scenario: String) async -> Measurement {
@@ -51,21 +56,27 @@ enum PerfProbe {
         var result = Measurement(seconds: 0)
         switch scenario {
         case "spacelens":
-            if let tree = try? await services.diskTree.tree(at: home, depth: 2, onProgress: { progress in
-                visited.withLock { $0 = progress.filesVisited }
-            }) {
+            do {
+                let tree = try await services.diskTree.tree(at: home, depth: 2, onProgress: { progress in
+                    visited.withLock { $0 = progress.filesVisited }
+                })
                 result.files = visited.withLock { $0 }
                 result.items = tree.node.children.count
+            } catch {
+                result.error = error.localizedDescription
             }
         case "cleanup", "smartcare", "uninstaller":
             let module: AppModule = scenario == "cleanup" ? .cleanup : scenario == "smartcare" ? .smartCare : .applications
             let options = ScanOptions(projectRoots: [home.appending(path: "personal"), home.appending(path: "Developer")])
-            if let scan = try? await services.cleanup.scan(module: module, options: options, onUpdate: { _ in }) {
+            do {
+                let scan = try await services.cleanup.scan(module: module, options: options, onUpdate: { _ in })
                 result.items = scan.items.count
                 result.files = scan.items.count
+            } catch {
+                result.error = error.localizedDescription
             }
         default:
-            print("{\"error\":\"unknown scenario \(scenario)\"}")
+            result.error = "unknown scenario \(scenario)"
         }
         let elapsed = start.duration(to: clock.now)
         result.seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
