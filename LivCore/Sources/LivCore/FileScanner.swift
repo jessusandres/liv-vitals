@@ -74,11 +74,26 @@ public enum ScanError: Error, Equatable, Sendable, CustomStringConvertible {
 public struct FileScanner: Sendable {
     private let safetyGuard: SafetyGuard?
     private let progressInterval: Duration
+    private let legacyEnumeration: Bool
+    private let batchObserver: (@Sendable (Int) -> Void)?
 
     /// - Parameter guard: When set, whitelisted folders are skipped entirely.
     public init(guard safetyGuard: SafetyGuard? = nil, progressInterval: Duration = .milliseconds(250)) {
+        self.init(guard: safetyGuard, progressInterval: progressInterval, legacyEnumeration: false, batchObserver: nil)
+    }
+
+    /// Tests only: `legacyEnumeration` forces the `readdir` + `fstatat` path, and `batchObserver` hears about
+    /// every batch of folder entries just before it is processed (its argument is the batch's entry count).
+    init(
+        guard safetyGuard: SafetyGuard? = nil,
+        progressInterval: Duration = .milliseconds(250),
+        legacyEnumeration: Bool,
+        batchObserver: (@Sendable (Int) -> Void)? = nil
+    ) {
         self.safetyGuard = safetyGuard
         self.progressInterval = progressInterval
+        self.legacyEnumeration = legacyEnumeration
+        self.batchObserver = batchObserver
     }
 
     /// Allocated size of a file or folder tree. Never follows symlinks; hard links count once.
@@ -130,13 +145,14 @@ public struct FileScanner: Sendable {
         run.finish(path: urls.last?.path ?? "")
 
         // Whether a name is "outside" depends on everything walked, so shared space is settled only now.
+        let shared = run.inodes.sharedBytesByOwner()
         for (url, owner) in owners {
             guard let measurement = results[url] else { continue }
             results[url] = Measurement(
                 size: measurement.size,
                 fileCount: measurement.fileCount,
                 issues: measurement.issues,
-                sharedSize: ByteSize(run.inodes.sharedBytes(owner: owner))
+                sharedSize: ByteSize(shared[owner] ?? 0)
             )
         }
         return results
@@ -156,7 +172,7 @@ public struct FileScanner: Sendable {
 
     private func measureOrReport(_ url: URL, run: ScanRun) throws -> (Measurement, owner: Int?) {
         do {
-            let walked = try walk(url, run: run, depth: 0)
+            let walked = try walk(url, run: run, depth: 0, settleSharedSize: false)
             return (walked.measurement, walked.owner)
         } catch let error as ScanError {
             return (Measurement(size: .zero, fileCount: 0, issues: [ScanIssue(url: url, reason: error.reason)]), nil)
@@ -164,7 +180,13 @@ public struct FileScanner: Sendable {
     }
 
     /// Walks one root. Folders deeper than `depth` levels below it are collapsed into a single node.
-    private func walk(_ url: URL, run: ScanRun, depth: Int) throws -> (measurement: Measurement, node: DiskNode, owner: Int) {
+    /// `settleSharedSize` is false when the caller settles shared space itself once everything is walked.
+    private func walk(
+        _ url: URL,
+        run: ScanRun,
+        depth: Int,
+        settleSharedSize: Bool = true
+    ) throws -> (measurement: Measurement, node: DiskNode, owner: Int) {
         try Task.checkCancellation()
         let path = url.standardizedFileURL.path
         var rootStat = stat()
@@ -173,7 +195,10 @@ public struct FileScanner: Sendable {
         }
         let root = EntryStat(rootStat)
         let owner = run.makeOwner()
-        let traversal = Traversal(run: run, safetyGuard: safetyGuard, rootDevice: root.device, owner: owner)
+        let traversal = Traversal(
+            run: run, safetyGuard: safetyGuard, rootDevice: root.device, owner: owner,
+            legacyEnumeration: legacyEnumeration, batchObserver: batchObserver
+        )
 
         let node: DiskNode
         let total: Int64
@@ -192,7 +217,7 @@ public struct FileScanner: Sendable {
             size: ByteSize(total),
             fileCount: traversal.fileCount,
             issues: traversal.issues,
-            sharedSize: ByteSize(run.inodes.sharedBytes(owner: owner))
+            sharedSize: settleSharedSize ? ByteSize(run.inodes.sharedBytes(owner: owner)) : .zero
         )
         return (measurement, node, owner)
     }
@@ -215,6 +240,15 @@ private struct EntryStat {
         inode = st.st_ino
         linkCount = st.st_nlink
         allocatedBytes = Int64(st.st_blocks) * 512
+    }
+
+    /// A non-folder entry as `getattrlistbulk` reports it.
+    init(device: dev_t, inode: ino_t, linkCount: nlink_t, allocatedBytes: Int64) {
+        isDirectory = false
+        self.device = device
+        self.inode = inode
+        self.linkCount = linkCount
+        self.allocatedBytes = allocatedBytes
     }
 }
 
@@ -277,6 +311,9 @@ private final class Traversal {
     private let safetyGuard: SafetyGuard?
     private let rootDevice: dev_t
     private let owner: Int
+    private let legacyEnumeration: Bool
+    private let batchObserver: (@Sendable (Int) -> Void)?
+    private var bulkBuffer: UnsafeMutableRawPointer?
 
     private(set) var issues: [ScanIssue] = []
     private(set) var fileCount = 0
@@ -284,12 +321,23 @@ private final class Traversal {
     private var pendingBytes: Int64 = 0
     private var entriesSinceCheck = 0
 
-    init(run: ScanRun, safetyGuard: SafetyGuard?, rootDevice: dev_t, owner: Int) {
+    init(
+        run: ScanRun,
+        safetyGuard: SafetyGuard?,
+        rootDevice: dev_t,
+        owner: Int,
+        legacyEnumeration: Bool,
+        batchObserver: (@Sendable (Int) -> Void)?
+    ) {
+        self.legacyEnumeration = legacyEnumeration
+        self.batchObserver = batchObserver
         self.owner = owner
         self.run = run
         self.safetyGuard = safetyGuard
         self.rootDevice = rootDevice
     }
+
+    deinit { bulkBuffer?.deallocate() }
 
     /// Total bytes of the folder at `path` (its own entry included) and, when `level < depth`, its child nodes.
     /// `hadEntries` is false for an empty folder, which is never worth collapsing.
@@ -304,7 +352,7 @@ private final class Traversal {
         var children: [DiskNode] = []
         let expand = level < depth
 
-        let listing = readEntries(of: path)
+        let listing = try readEntries(of: path)
         if let failure = listing.failure {
             if level == 0 { throw ScanError.unreadable(URL(filePath: path), reason: ScanError.message(for: failure)) }
             issues.append(ScanIssue(url: URL(filePath: path, directoryHint: .isDirectory), reason: ScanError.message(for: failure)))
@@ -368,14 +416,134 @@ private final class Traversal {
         flush(path: path)
     }
 
-    /// Lists a folder and stats every entry while the folder is open, so only one descriptor is held at a time.
-    private func readEntries(of path: String) -> (entries: [(name: String, stat: EntryStat)], failure: Int32?) {
+    /// Lists a folder with its entries' stats. Uses `getattrlistbulk`, which returns names, types, link counts and
+    /// sizes for hundreds of entries per call; falls back to `readdir` + `fstatat` for a folder (or volume) that
+    /// does not support it. Both paths check for cancellation between batches of entries.
+    private func readEntries(of path: String) throws -> (entries: [(name: String, stat: EntryStat)], failure: Int32?) {
+        if !legacyEnumeration {
+            let descriptor = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+            guard descriptor >= 0 else { return ([], errno) }
+            defer { close(descriptor) }
+            if let listing = try readEntriesInBulk(descriptor, path: path) { return listing }
+        }
+        return try readEntriesWithReaddir(of: path)
+    }
+
+    private static let bulkBufferSize = 128 * 1024
+
+    private struct BulkRecordHeader {
+        var length: UInt32
+        var returned: attribute_set_t
+    }
+
+    /// Nil when the folder does not support `getattrlistbulk` (nothing was consumed, so the caller starts over).
+    private func readEntriesInBulk(
+        _ descriptor: Int32,
+        path: String
+    ) throws -> (entries: [(name: String, stat: EntryStat)], failure: Int32?)? {
+        var list = attrlist()
+        list.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
+        list.commonattr = attrgroup_t(bitPattern: Int32(bitPattern: ATTR_CMN_RETURNED_ATTRS))
+            | attrgroup_t(ATTR_CMN_ERROR | ATTR_CMN_NAME | ATTR_CMN_DEVID | ATTR_CMN_OBJTYPE | ATTR_CMN_FILEID)
+        list.fileattr = attrgroup_t(ATTR_FILE_LINKCOUNT | ATTR_FILE_ALLOCSIZE)
+
+        if bulkBuffer == nil { bulkBuffer = .allocate(byteCount: Self.bulkBufferSize, alignment: 8) }
+        let buffer = bulkBuffer!
+        var entries: [(name: String, stat: EntryStat)] = []
+        var firstCall = true
+
+        while true {
+            try Task.checkCancellation()
+            let count = getattrlistbulk(descriptor, &list, buffer, Self.bulkBufferSize, 0)
+            if count < 0 {
+                if firstCall, errno == ENOTSUP || errno == EINVAL || errno == ENOSYS { return nil }
+                return (entries, errno)
+            }
+            if count == 0 { return (entries, nil) }
+            firstCall = false
+            batchObserver?(Int(count))
+
+            var record = UnsafeRawPointer(buffer)
+            for _ in 0..<Int(count) {
+                let length = Int(record.loadUnaligned(as: UInt32.self))
+                if let parsed = parseBulkRecord(record) {
+                    switch parsed {
+                    case .entry(let name, let stat): entries.append((name, stat))
+                    case .failure(let name, let code):
+                        let url = URL(filePath: path + "/" + name, directoryHint: .notDirectory)
+                        issues.append(ScanIssue(url: url, reason: ScanError.message(for: code)))
+                    case .needsStat(let name):
+                        var st = stat()
+                        if fstatat(descriptor, name, &st, AT_SYMLINK_NOFOLLOW) == 0 {
+                            entries.append((name, EntryStat(st)))
+                        } else {
+                            let url = URL(filePath: path + "/" + name, directoryHint: .notDirectory)
+                            issues.append(ScanIssue(url: url, reason: ScanError.message(for: errno)))
+                        }
+                    }
+                }
+                record += length
+            }
+        }
+    }
+
+    private enum BulkRecord {
+        case entry(String, EntryStat)
+        case failure(String, Int32)
+        /// Folders (their own size and device must match `lstat` exactly) and anything the volume left out.
+        case needsStat(String)
+    }
+
+    /// One packed record: length, returned-attributes set, then, in order, the error, name, device, object type,
+    /// file id and, for files, the link count and allocated size. Only the attributes the set says are present.
+    private func parseBulkRecord(_ record: UnsafeRawPointer) -> BulkRecord? {
+        let returned = record.loadUnaligned(fromByteOffset: MemoryLayout<UInt32>.size, as: attribute_set_t.self)
+        var offset = MemoryLayout<UInt32>.size + MemoryLayout<attribute_set_t>.size
+        func next<T>(_: T.Type) -> T {
+            defer { offset += MemoryLayout<T>.size }
+            return record.loadUnaligned(fromByteOffset: offset, as: T.self)
+        }
+
+        let common = returned.commonattr
+        var code: UInt32 = 0
+        if common & attrgroup_t(ATTR_CMN_ERROR) != 0 { code = next(UInt32.self) }
+        guard common & attrgroup_t(ATTR_CMN_NAME) != 0 else { return nil }
+        let nameFieldOffset = offset
+        let reference = next(attrreference_t.self)
+        let namePointer = record.advanced(by: nameFieldOffset + Int(reference.attr_dataoffset))
+        let name = String(cString: namePointer.assumingMemoryBound(to: CChar.self))
+        if name == "." || name == ".." { return nil }
+        if code != 0 { return .failure(name, Int32(code)) }
+
+        let wanted = attrgroup_t(ATTR_CMN_DEVID | ATTR_CMN_OBJTYPE | ATTR_CMN_FILEID)
+        guard common & wanted == wanted else { return .needsStat(name) }
+        let device = next(dev_t.self)
+        let type = next(UInt32.self)
+        let inode = next(UInt64.self)
+        if type == VDIR.rawValue { return .needsStat(name) }
+
+        let fileAttrs = attrgroup_t(ATTR_FILE_LINKCOUNT | ATTR_FILE_ALLOCSIZE)
+        guard returned.fileattr & fileAttrs == fileAttrs else { return .needsStat(name) }
+        let linkCount = next(UInt32.self)
+        let allocated = next(Int64.self)
+        return .entry(name, EntryStat(device: device, inode: ino_t(inode), linkCount: nlink_t(linkCount), allocatedBytes: allocated))
+    }
+
+    /// The pre-`getattrlistbulk` path: lists a folder and stats every entry while the folder is open.
+    private func readEntriesWithReaddir(of path: String) throws -> (entries: [(name: String, stat: EntryStat)], failure: Int32?) {
         guard let dir = opendir(path) else { return ([], errno) }
         defer { closedir(dir) }
         let descriptor = dirfd(dir)
         var entries: [(name: String, stat: EntryStat)] = []
+        var sinceCheck = 0
 
         while let entry = readdir(dir) {
+            sinceCheck += 1
+            if sinceCheck >= Self.entriesPerCheck {
+                sinceCheck = 0
+                try Task.checkCancellation()
+                batchObserver?(Self.entriesPerCheck)
+            }
             let name = withUnsafePointer(to: &entry.pointee.d_name) {
                 $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { String(cString: $0) }
             }
