@@ -46,6 +46,13 @@ public struct ProcessCommandRunner: CommandRunning {
     public init() {}
 
     public func run(_ executable: String, _ arguments: [String], timeout: Duration) async throws -> CommandResult {
+        try await run(executable, arguments, timeout: timeout, observing: nil)
+    }
+
+    /// `observing` receives the per-command control object, so tests can check that it is released.
+    func run(
+        _ executable: String, _ arguments: [String], timeout: Duration, observing: (@Sendable (AnyObject) -> Void)?
+    ) async throws -> CommandResult {
         guard executable.hasPrefix("/") else { throw CommandError.notAbsolute(executable) }
         let process = Process()
         process.executableURL = URL(filePath: executable)
@@ -57,6 +64,7 @@ public struct ProcessCommandRunner: CommandRunning {
         ]
         process.standardInput = FileHandle.nullDevice
         let control = Control(process)
+        observing?(control)
         let name = URL(filePath: executable).lastPathComponent
 
         let result = try await withTaskCancellationHandler {
@@ -78,24 +86,20 @@ public struct ProcessCommandRunner: CommandRunning {
                     return
                 }
                 let seconds = Double(timeout.components.seconds) + Double(timeout.components.attoseconds) / 1e18
-                DispatchQueue.global().asyncAfter(deadline: .now() + seconds) { control.stop(timedOut: true) }
-                DispatchQueue.global().async {
-                    // Both pipes are read at the same time, so a program that fills one never blocks on it.
-                    let group = DispatchGroup()
-                    let captured = OSAllocatedUnfairLock(initialState: (out: Data(), err: Data()))
-                    group.enter()
+                control.armTimeout(after: seconds)
+                // Both pipes are read at the same time, so a program that fills one never blocks on it. The
+                // group also waits for the process to exit, so no thread sits blocked waiting for that.
+                let captured = OSAllocatedUnfairLock(initialState: (out: Data(), err: Data()))
+                for stream in [outHandle, errHandle] {
+                    let isOutput = stream === outHandle
+                    control.pending.enter()
                     DispatchQueue.global().async {
-                        let data = Self.drain(outHandle)
-                        captured.withLock { $0.out = data }
-                        group.leave()
+                        let data = Self.drain(stream)
+                        captured.withLock { if isOutput { $0.out = data } else { $0.err = data } }
+                        control.pending.leave()
                     }
-                    group.enter()
-                    DispatchQueue.global().async {
-                        let data = Self.drain(errHandle)
-                        captured.withLock { $0.err = data }
-                        group.leave()
-                    }
-                    group.wait()
+                }
+                control.pending.notify(queue: .global()) {
                     let status = control.finish()
                     let (out, err) = captured.withLock { ($0.out, $0.err) }
                     continuation.resume(returning: CommandResult(
@@ -127,22 +131,36 @@ public struct ProcessCommandRunner: CommandRunning {
 
     /// Lets cancellation and the timeout end the process from other threads.
     private final class Control: @unchecked Sendable {
+        /// `DispatchWorkItem` is not `Sendable`; it is only ever touched under the state lock.
+        struct TimeoutItem: @unchecked Sendable { let item: DispatchWorkItem }
+
         private struct State {
             var launched = false
             var stopRequested = false
             var timedOut = false
+            var timeoutItem: TimeoutItem?
         }
 
         private let process: Process
-        private let exited = DispatchSemaphore(value: 0)
+        /// Leaves when the process has exited; the output readers join it, so one notification covers all three.
+        let pending = DispatchGroup()
         private let state = OSAllocatedUnfairLock(initialState: State())
 
         init(_ process: Process) {
             self.process = process
             // `waitUntilExit` waits on a run loop, and from a background thread its wake-up was sometimes lost
             // under parallel load, so the wait hung. The termination handler runs on a dispatch queue instead.
-            let exited = exited
-            process.terminationHandler = { _ in exited.signal() }
+            let pending = pending
+            pending.enter()
+            process.terminationHandler = { _ in pending.leave() }
+        }
+
+        /// The deadline holds only a weak reference, so it keeps neither this object nor the process alive.
+        func armTimeout(after seconds: Double) {
+            let item = DispatchWorkItem { [weak self] in self?.stop(timedOut: true) }
+            let boxed = TimeoutItem(item: item)
+            state.withLock { $0.timeoutItem = boxed }
+            DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: item)
         }
 
         func launch(_ out: Pipe, _ err: Pipe) throws {
@@ -166,8 +184,9 @@ public struct ProcessCommandRunner: CommandRunning {
         var timedOut: Bool { state.withLock { $0.timedOut } }
         var wasStopped: Bool { state.withLock { $0.stopRequested } }
 
+        /// Called once the process and both pipes are done: cancels the deadline and returns the exit status.
         func finish() -> Int32 {
-            exited.wait()
+            state.withLock { $0.timeoutItem?.item.cancel(); $0.timeoutItem = nil }
             return process.terminationStatus
         }
     }
