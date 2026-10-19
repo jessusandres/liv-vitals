@@ -65,4 +65,24 @@ struct CommandRunnerTests {
         #expect(names.count <= 6)
         #expect(result.output.contains("PATH=/usr/bin:/bin:/usr/sbin:/sbin"))
     }
+
+    @Test func aFinishedCommandReleasesItsTimeoutAndControl() async throws {
+        final class Weak: @unchecked Sendable { weak var object: AnyObject? }
+        let seen = Weak()
+        // A long deadline: if the timeout work kept the control alive, it would still exist afterwards.
+        _ = try await runner.run("/bin/echo", ["x"], timeout: .seconds(600), observing: { seen.object = $0 })
+        for _ in 0..<50 where seen.object != nil { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(seen.object == nil)
+    }
+
+    @Test func manyConcurrentCommandsWithLargeOutputOnBothPipesComplete() async throws {
+        let runner = self.runner
+        let script = "head -c 300000 /dev/zero; head -c 300000 /dev/zero >&2"
+        let results = try await withThrowingTaskGroup(of: CommandResult.self) { group in
+            for _ in 0..<40 { group.addTask { try await runner.run("/bin/sh", ["-c", script], timeout: .seconds(60)) } }
+            return try await group.reduce(into: []) { $0.append($1) }
+        }
+        #expect(results.count == 40)
+        #expect(results.allSatisfy { $0.status == 0 && $0.output.utf8.count == 64 * 1024 && $0.errorOutput.utf8.count == 64 * 1024 })
+    }
 }
