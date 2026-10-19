@@ -5,12 +5,15 @@ public enum MetricsMonitor {
     /// consumer stops the sampling and calls `finish()` on the sampler.
     ///
     /// A reading that fails is skipped; the next one is tried on schedule.
+    ///
+    /// Only the newest snapshot is buffered: a consumer that falls behind skips stale readings instead of
+    /// queueing them, so memory stays bounded and it always sees the freshest values.
     public static func snapshots(
         sampler: any MetricsSampling,
         every interval: Duration = .seconds(1),
         includeProcesses: Bool = true
     ) -> AsyncStream<MetricsSnapshot> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let task = Task {
                 var aggregator = MetricsAggregator()
                 while !Task.isCancelled {

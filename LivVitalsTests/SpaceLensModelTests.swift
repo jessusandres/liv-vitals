@@ -436,6 +436,23 @@ struct SpaceLensActionsTests {
         #expect(Set(model.issues.map(\.url)) == [elsewhere.url, stillThere.url])
     }
 
+    @Test func rescanForgetsIssuesInsideTheFolderAndItselfButNotNamesSharingItsPrefix() async {
+        var fake = FakeDiskTree(tree: Self.rootNode)
+        let folderItself = ScanIssue(url: Self.downloads, reason: "Permission denied")
+        let inside = ScanIssue(url: Self.downloads.appending(path: "a/b"), reason: "Permission denied")
+        let sibling = ScanIssue(url: Self.home.appending(path: "Downloads2/x"), reason: "Permission denied")
+        fake.issues = [folderItself, inside, sibling]
+        fake.subtreeIssues = []
+        fake.subtrees = [Self.downloads: Self.rootNode.node(at: Self.downloads)!]
+        let (model, _) = await makeModel(fake)
+        #expect(model.issues == [folderItself, inside, sibling])
+
+        model.open(node(model, Self.downloads))
+        model.rescanFocused()
+        #expect(await waitUntil { model.rescanningURL == nil })
+        #expect(model.issues == [sibling])
+    }
+
     @Test func aFolderThatNoLongerExistsIsDroppedAndTheViewMovesUp() async {
         var fake = FakeDiskTree(tree: Self.rootNode)
         fake.subtreeNotFound = true
