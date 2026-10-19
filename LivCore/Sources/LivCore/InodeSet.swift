@@ -40,4 +40,15 @@ final class InodeSet: Sendable {
             }
         }
     }
+
+    /// `sharedBytes(owner:)` for every owner at once, in one pass under one lock.
+    func sharedBytesByOwner() -> [Int: Int64] {
+        entries.withLock { entries in
+            var totals: [Int: Int64] = [:]
+            for entry in entries.values where Int(entry.linkCount) > entry.seen {
+                totals[entry.owner, default: 0] += entry.bytes
+            }
+            return totals
+        }
+    }
 }
