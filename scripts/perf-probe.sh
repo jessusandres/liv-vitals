@@ -5,7 +5,7 @@
 # Each line: the probe's JSON (time, files, items, ok/error, longest main-thread stall) and the peak memory from /usr/bin/time -l.
 set -eu
 set -o pipefail
-status=0
+exit_code=0
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 xcodebuild -project LivVitals.xcodeproj -scheme LivVitals -configuration Release -derivedDataPath build/perf \
@@ -18,6 +18,6 @@ for scenario in $scenarios; do
   /usr/bin/time -l "$binary" -LivPerfProbe "$scenario" -LivPerfRuns $runs 2>&1 \
     | grep -E '^\{|maximum resident set size|real' \
     | awk '/maximum resident set size/ { printf "{\"peakMemoryMB\":%d}\n", $1 / 1048576; next } { print }' \
-    || { echo "{\"scenario\":\"$scenario\",\"ok\":false,\"error\":\"probe exited with an error\"}"; status=1; }
+    || { echo "{\"scenario\":\"$scenario\",\"ok\":false,\"error\":\"probe exited with an error\"}"; exit_code=1; }
 done
-exit $status
+exit $exit_code
