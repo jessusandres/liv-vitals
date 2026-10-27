@@ -76,24 +76,28 @@ public struct FileScanner: Sendable {
     private let progressInterval: Duration
     private let legacyEnumeration: Bool
     private let batchObserver: (@Sendable (Int) -> Void)?
+    private let treeWorkers: Int
 
     /// - Parameter guard: When set, whitelisted folders are skipped entirely.
     public init(guard safetyGuard: SafetyGuard? = nil, progressInterval: Duration = .milliseconds(250)) {
         self.init(guard: safetyGuard, progressInterval: progressInterval, legacyEnumeration: false, batchObserver: nil)
     }
 
-    /// Tests only: `legacyEnumeration` forces the `readdir` + `fstatat` path, and `batchObserver` hears about
-    /// every batch of folder entries just before it is processed (its argument is the batch's entry count).
+    /// Tests only: `legacyEnumeration` forces the `readdir` + `fstatat` path, `batchObserver` hears about
+    /// every batch of folder entries just before it is processed (its argument is the batch's entry count), and
+    /// `treeWorkers` sets how many threads `tree` walks with.
     init(
         guard safetyGuard: SafetyGuard? = nil,
         progressInterval: Duration = .milliseconds(250),
         legacyEnumeration: Bool,
-        batchObserver: (@Sendable (Int) -> Void)? = nil
+        batchObserver: (@Sendable (Int) -> Void)? = nil,
+        treeWorkers: Int = min(8, ProcessInfo.processInfo.activeProcessorCount)
     ) {
         self.safetyGuard = safetyGuard
         self.progressInterval = progressInterval
         self.legacyEnumeration = legacyEnumeration
         self.batchObserver = batchObserver
+        self.treeWorkers = max(1, treeWorkers)
     }
 
     /// Allocated size of a file or folder tree. Never follows symlinks; hard links count once.
@@ -159,15 +163,41 @@ public struct FileScanner: Sendable {
     }
 
     /// Tree for Space Lens: real children down to `depth`, deeper folders collapsed to one node with their total size.
+    ///
+    /// Folders are walked by several threads. The result does not depend on their timing: a file with several
+    /// names is counted once, in the node of its smallest path (component by component), and `issues` are sorted
+    /// by path.
     public func tree(
         at root: URL,
         depth: Int,
         progress: (@Sendable (ScanProgress) -> Void)? = nil
     ) async throws -> (node: DiskNode, issues: [ScanIssue]) {
+        try Task.checkCancellation()
         let run = ScanRun(progress: progress, interval: progressInterval)
-        let walked = try walk(root, run: run, depth: max(depth, 0))
+        let path = root.standardizedFileURL.path
+        var rootStat = stat()
+        guard lstat(path, &rootStat) == 0 else {
+            throw errno == ENOENT ? ScanError.notFound(root) : .unreadable(root, reason: ScanError.message(for: errno))
+        }
+        let entry = EntryStat(rootStat)
+        guard entry.isDirectory else {
+            let walked = try walk(root, run: run, depth: 0)
+            run.finish(path: root.path)
+            return (walked.node, walked.measurement.issues)
+        }
+
+        let walk = ParallelTreeWalk(
+            run: run, safetyGuard: safetyGuard, rootDevice: entry.device, depth: max(depth, 0),
+            legacyEnumeration: legacyEnumeration, batchObserver: batchObserver
+        )
+        let result = try await walk.run(root: root, path: path, own: entry.allocatedBytes, workers: treeWorkers)
         run.finish(path: root.path)
-        return (walked.node, walked.measurement.issues)
+        return result
+    }
+
+    /// Path order component by component: "/" sorts before every other byte, so "a/b" comes before "a-b".
+    static func pathPrecedes(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.lexicographicallyPrecedes(rhs.utf8) { ($0 == 0x2F ? 0 : $0) < ($1 == 0x2F ? 0 : $1) }
     }
 
     private func measureOrReport(_ url: URL, run: ScanRun) throws -> (Measurement, owner: Int?) {
@@ -311,11 +341,9 @@ private final class Traversal {
     private let safetyGuard: SafetyGuard?
     private let rootDevice: dev_t
     private let owner: Int
-    private let legacyEnumeration: Bool
-    private let batchObserver: (@Sendable (Int) -> Void)?
-    private var bulkBuffer: UnsafeMutableRawPointer?
+    private let reader: DirectoryReader
 
-    private(set) var issues: [ScanIssue] = []
+    var issues: [ScanIssue] { reader.issues }
     private(set) var fileCount = 0
     private var pendingFiles = 0
     private var pendingBytes: Int64 = 0
@@ -329,15 +357,12 @@ private final class Traversal {
         legacyEnumeration: Bool,
         batchObserver: (@Sendable (Int) -> Void)?
     ) {
-        self.legacyEnumeration = legacyEnumeration
-        self.batchObserver = batchObserver
+        self.reader = DirectoryReader(legacyEnumeration: legacyEnumeration, batchObserver: batchObserver)
         self.owner = owner
         self.run = run
         self.safetyGuard = safetyGuard
         self.rootDevice = rootDevice
     }
-
-    deinit { bulkBuffer?.deallocate() }
 
     /// Total bytes of the folder at `path` (its own entry included) and, when `level < depth`, its child nodes.
     /// `hadEntries` is false for an empty folder, which is never worth collapsing.
@@ -352,10 +377,10 @@ private final class Traversal {
         var children: [DiskNode] = []
         let expand = level < depth
 
-        let listing = try readEntries(of: path)
+        let listing = try reader.readEntries(of: path)
         if let failure = listing.failure {
             if level == 0 { throw ScanError.unreadable(URL(filePath: path), reason: ScanError.message(for: failure)) }
-            issues.append(ScanIssue(url: URL(filePath: path, directoryHint: .isDirectory), reason: ScanError.message(for: failure)))
+            reader.issues.append(ScanIssue(url: URL(filePath: path, directoryHint: .isDirectory), reason: ScanError.message(for: failure)))
         }
 
         for entry in listing.entries {
@@ -415,11 +440,41 @@ private final class Traversal {
         try Task.checkCancellation()
         flush(path: path)
     }
+}
+
+/// Lists folders with their entries' stats, and keeps the per-entry problems it met. Not thread-safe: every walker
+/// (or worker) gets its own, which also owns one reusable `getattrlistbulk` buffer.
+private final class DirectoryReader {
+    private static let entriesPerCheck = 500
+
+    private let legacyEnumeration: Bool
+    private let batchObserver: (@Sendable (Int) -> Void)?
+    /// Worker threads of the parallel tree walk have no current task, so they ask the walk instead.
+    private let isCancelled: () -> Bool
+    private var bulkBuffer: UnsafeMutableRawPointer?
+
+    var issues: [ScanIssue] = []
+
+    init(
+        legacyEnumeration: Bool,
+        batchObserver: (@Sendable (Int) -> Void)?,
+        isCancelled: @escaping () -> Bool = { Task.isCancelled }
+    ) {
+        self.legacyEnumeration = legacyEnumeration
+        self.batchObserver = batchObserver
+        self.isCancelled = isCancelled
+    }
+
+    deinit { bulkBuffer?.deallocate() }
+
+    private func checkCancellation() throws {
+        if isCancelled() { throw CancellationError() }
+    }
 
     /// Lists a folder with its entries' stats. Uses `getattrlistbulk`, which returns names, types, link counts and
     /// sizes for hundreds of entries per call; falls back to `readdir` + `fstatat` for a folder (or volume) that
     /// does not support it. Both paths check for cancellation between batches of entries.
-    private func readEntries(of path: String) throws -> (entries: [(name: String, stat: EntryStat)], failure: Int32?) {
+    func readEntries(of path: String) throws -> (entries: [(name: String, stat: EntryStat)], failure: Int32?) {
         if !legacyEnumeration {
             let descriptor = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
             guard descriptor >= 0 else { return ([], errno) }
@@ -453,7 +508,7 @@ private final class Traversal {
         var firstCall = true
 
         while true {
-            try Task.checkCancellation()
+            try checkCancellation()
             let count = getattrlistbulk(descriptor, &list, buffer, Self.bulkBufferSize, 0)
             if count < 0 {
                 if firstCall, errno == ENOTSUP || errno == EINVAL || errno == ENOSYS { return nil }
@@ -541,7 +596,7 @@ private final class Traversal {
             sinceCheck += 1
             if sinceCheck >= Self.entriesPerCheck {
                 sinceCheck = 0
-                try Task.checkCancellation()
+                try checkCancellation()
                 batchObserver?(Self.entriesPerCheck)
             }
             let name = withUnsafePointer(to: &entry.pointee.d_name) {
@@ -557,5 +612,236 @@ private final class Traversal {
             }
         }
         return (entries, nil)
+    }
+}
+
+// MARK: - Parallel tree walk
+
+/// A file or folder of the tree being built, down to the requested depth. Folders below that add their bytes to
+/// the collapsed folder that contains them.
+private final class TreeSlot: @unchecked Sendable {
+    let path: String
+    let isDirectory: Bool
+    /// Above the depth limit: its entries become child nodes.
+    let expanded: Bool
+    let own: Int64
+    // Written only by the one job that lists this folder, and read after every worker has finished.
+    var hadEntries = false
+    var children: [TreeSlot] = []
+    private let bytes = OSAllocatedUnfairLock(initialState: Int64(0))
+
+    init(path: String, isDirectory: Bool, expanded: Bool, own: Int64) {
+        self.path = path
+        self.isDirectory = isDirectory
+        self.expanded = expanded
+        self.own = own
+    }
+
+    func add(_ amount: Int64) {
+        bytes.withLock { $0 += amount }
+    }
+
+    /// The finished node; `url` replaces the one built from `path` (the root keeps the caller's URL).
+    func node(url: URL? = nil) -> DiskNode {
+        let total = bytes.withLock { $0 }
+        guard isDirectory else { return .file(url ?? URL(filePath: path, directoryHint: .notDirectory), size: ByteSize(total)) }
+        let url = url ?? URL(filePath: path, directoryHint: .isDirectory)
+        if expanded || !hadEntries {
+            return .directory(url, ownSize: ByteSize(own), children: children.map { $0.node() })
+        }
+        return .collapsedDirectory(url, size: ByteSize(total))
+    }
+}
+
+private struct TreeJob: @unchecked Sendable {
+    let path: String
+    let level: Int
+    let own: Int64
+    /// The folder's own slot when it is within the depth, otherwise the collapsed folder that takes its bytes.
+    let slot: TreeSlot
+}
+
+/// One name of a file that has several. Its bytes are added once every name has been met.
+private struct LinkSighting {
+    let id: FileID
+    let bytes: Int64
+    let path: String
+    let slot: TreeSlot
+}
+
+/// Folders waiting to be listed, shared by the workers. Last in, first out keeps the waiting list short.
+private final class TreeJobQueue: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var jobs: [TreeJob]
+    private var busy = 0
+    private var failure: (any Error)?
+    private let stopped = OSAllocatedUnfairLock(initialState: false)
+
+    init(_ first: TreeJob) {
+        jobs = [first]
+    }
+
+    var isStopped: Bool { stopped.withLock { $0 } }
+
+    var error: (any Error)? {
+        condition.lock()
+        defer { condition.unlock() }
+        return failure
+    }
+
+    /// The next folder, or nil once nothing is left or the walk stopped. Waits while busy workers may add more.
+    func next() -> TreeJob? {
+        condition.lock()
+        defer { condition.unlock() }
+        while jobs.isEmpty, busy > 0, failure == nil { condition.wait() }
+        guard failure == nil, let job = jobs.popLast() else { return nil }
+        busy += 1
+        return job
+    }
+
+    /// Ends a job taken with `next()`, queueing the folders it found.
+    func finished(adding found: [TreeJob]) {
+        condition.lock()
+        defer { condition.unlock() }
+        jobs.append(contentsOf: found.reversed())
+        busy -= 1
+        if !found.isEmpty || busy == 0 { condition.broadcast() }
+    }
+
+    /// Stops every worker; the first error is the one the walk throws.
+    func stop(_ error: any Error) {
+        stopped.withLock { $0 = true }
+        condition.lock()
+        defer { condition.unlock() }
+        if failure == nil { failure = error }
+        condition.broadcast()
+    }
+}
+
+/// What one worker collected; only that worker writes it.
+private final class TreeWorkerResult: @unchecked Sendable {
+    var sightings: [LinkSighting] = []
+    var issues: [ScanIssue] = []
+}
+
+/// `FileScanner.tree` on several threads. Sums do not depend on which thread adds them, and files with several
+/// names are settled at the end by path, so every run gives the same tree.
+private final class ParallelTreeWalk: @unchecked Sendable {
+    private let run: ScanRun
+    private let safetyGuard: SafetyGuard?
+    private let rootDevice: dev_t
+    private let depth: Int
+    private let legacyEnumeration: Bool
+    private let batchObserver: (@Sendable (Int) -> Void)?
+
+    init(
+        run: ScanRun,
+        safetyGuard: SafetyGuard?,
+        rootDevice: dev_t,
+        depth: Int,
+        legacyEnumeration: Bool,
+        batchObserver: (@Sendable (Int) -> Void)?
+    ) {
+        self.run = run
+        self.safetyGuard = safetyGuard
+        self.rootDevice = rootDevice
+        self.depth = depth
+        self.legacyEnumeration = legacyEnumeration
+        self.batchObserver = batchObserver
+    }
+
+    func run(root: URL, path: String, own: Int64, workers: Int) async throws -> (node: DiskNode, issues: [ScanIssue]) {
+        let top = TreeSlot(path: path, isDirectory: true, expanded: depth > 0, own: own)
+        let queue = TreeJobQueue(TreeJob(path: path, level: 0, own: own, slot: top))
+        let results = (0..<workers).map { _ in TreeWorkerResult() }
+
+        await withTaskCancellationHandler {
+            DispatchQueue.concurrentPerform(iterations: workers) { index in
+                let reader = DirectoryReader(
+                    legacyEnumeration: legacyEnumeration, batchObserver: batchObserver, isCancelled: { queue.isStopped }
+                )
+                let result = results[index]
+                while let job = queue.next() {
+                    do {
+                        queue.finished(adding: try visit(job, reader: reader, sightings: &result.sightings))
+                    } catch {
+                        queue.stop(error)
+                        queue.finished(adding: [])
+                    }
+                }
+                result.issues = reader.issues
+            }
+        } onCancel: {
+            queue.stop(CancellationError())
+        }
+        if let error = queue.error { throw error }
+
+        var owners: [FileID: LinkSighting] = [:]
+        for sighting in results.flatMap(\.sightings) {
+            if let current = owners[sighting.id], !FileScanner.pathPrecedes(sighting.path, current.path) { continue }
+            owners[sighting.id] = sighting
+        }
+        var linkedBytes: Int64 = 0
+        for owner in owners.values {
+            owner.slot.add(owner.bytes)
+            linkedBytes += owner.bytes
+        }
+        run.record(files: 0, bytes: linkedBytes, path: path)
+
+        let issues = results.flatMap(\.issues).sorted {
+            $0.url.path == $1.url.path ? $0.reason < $1.reason : FileScanner.pathPrecedes($0.url.path, $1.url.path)
+        }
+        return (top.node(url: root), issues)
+    }
+
+    /// Lists one folder, adds what it holds to its slot and returns its subfolders as new jobs.
+    private func visit(_ job: TreeJob, reader: DirectoryReader, sightings: inout [LinkSighting]) throws -> [TreeJob] {
+        let listing = try reader.readEntries(of: job.path)
+        if let failure = listing.failure {
+            if job.level == 0 { throw ScanError.unreadable(URL(filePath: job.path), reason: ScanError.message(for: failure)) }
+            reader.issues.append(
+                ScanIssue(url: URL(filePath: job.path, directoryHint: .isDirectory), reason: ScanError.message(for: failure))
+            )
+        }
+        let expand = job.level < depth
+        if job.level <= depth { job.slot.hadEntries = !listing.entries.isEmpty }
+
+        var slotBytes = job.own
+        var counted = job.own
+        var files = 0
+        var found: [TreeJob] = []
+        for (name, stat) in listing.entries {
+            if stat.device != rootDevice { continue }
+            let childPath = job.path == "/" ? "/" + name : job.path + "/" + name
+            if safetyGuard?.isExcludedFromScan(path: childPath) == true { continue }
+
+            if stat.isDirectory {
+                var slot = job.slot
+                if expand {
+                    slot = TreeSlot(path: childPath, isDirectory: true, expanded: job.level + 1 < depth, own: stat.allocatedBytes)
+                    job.slot.children.append(slot)
+                }
+                found.append(TreeJob(path: childPath, level: job.level + 1, own: stat.allocatedBytes, slot: slot))
+                continue
+            }
+
+            files += 1
+            var slot = job.slot
+            if expand {
+                slot = TreeSlot(path: childPath, isDirectory: false, expanded: false, own: 0)
+                job.slot.children.append(slot)
+            }
+            if stat.linkCount > 1 {
+                sightings.append(LinkSighting(
+                    id: FileID(device: stat.device, inode: stat.inode), bytes: stat.allocatedBytes, path: childPath, slot: slot
+                ))
+                continue
+            }
+            counted += stat.allocatedBytes
+            if expand { slot.add(stat.allocatedBytes) } else { slotBytes += stat.allocatedBytes }
+        }
+        job.slot.add(slotBytes)
+        run.record(files: files, bytes: counted, path: job.path)
+        return found
     }
 }

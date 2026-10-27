@@ -133,6 +133,7 @@ struct FileScannerBulkTests {
     }
 
     /// Manual A/B on a real folder: `LIV_SCAN_CORPUS=/Applications/Xcode.app swift test --filter corpus`.
+    /// "legacy" is `readdir` + `fstatat` on one thread; "bulk" is `getattrlistbulk` on the default worker count.
     @Test func corpusEquivalenceAndTiming() async throws {
         guard let path = ProcessInfo.processInfo.environment["LIV_SCAN_CORPUS"] else { return }
         let root = URL(filePath: path)
@@ -140,10 +141,13 @@ struct FileScannerBulkTests {
         var legacy: (node: DiskNode, issues: [ScanIssue])?
         var bulk: (node: DiskNode, issues: [ScanIssue])?
         for pass in 1...2 {
-            let legacyTime = try await clock.measure { legacy = try await FileScanner(legacyEnumeration: true).tree(at: root, depth: 2) }
+            let legacyTime = try await clock.measure {
+                legacy = try await FileScanner(legacyEnumeration: true, treeWorkers: 1).tree(at: root, depth: 2)
+            }
             let bulkTime = try await clock.measure { bulk = try await FileScanner().tree(at: root, depth: 2) }
             print("CORPUS pass \(pass): legacy \(legacyTime), bulk \(bulkTime), size \(bulk!.node.size.bytes)")
         }
+        #expect(legacy!.node == bulk!.node)
         #expect(legacy!.node.size == bulk!.node.size)
         check(bulk!.node, legacy!.node)
         #expect(Set(legacy!.issues) == Set(bulk!.issues))
