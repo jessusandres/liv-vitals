@@ -26,6 +26,7 @@ struct LivVitalsApp: App {
         if !isTesting { _ = try? DataFolderMigration.run() }
         let store = AppStore(services: isTesting ? .mock : .live)
         _store = State(initialValue: store)
+        AppDelegate.keepAwake = store.keepAwake
         _dock = State(initialValue: isTesting ? nil : DockPresence(
             hideFromDock: { store.settings.hideFromDockWhenClosed },
             menuBarShown: { store.settings.hasMenuBarContent }
@@ -60,6 +61,8 @@ struct LivVitalsApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        KeepAwakeScene(store: store)
+
         // One menu bar item per metric, each inserted by its own setting (all off until the user turns them on).
         Group {
             IndicatorScene(store: store, metric: .cpu)
@@ -83,10 +86,17 @@ struct LivVitalsApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// With anything in the menu bar (the health icon or an indicator), closing the window leaves the app running there.
+    /// Set by `LivVitalsApp`, so quitting can release the keep-awake assertions at once.
+    static weak var keepAwake: KeepAwakeModel?
+
+    /// With anything in the menu bar (the health icon, the keep-awake cup or an indicator), closing the window leaves the app running there.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         let settings = SettingsStore.standard().load()
-        return !(settings.showMenuBarExtra || settings.indicators.contains { $0.enabled })
+        return !(settings.showMenuBarExtra || settings.keepAwake.showInMenuBar || settings.indicators.contains { $0.enabled })
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.keepAwake?.shutdown()
     }
 }
 

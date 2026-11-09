@@ -14,11 +14,13 @@ struct IndicatorSettingsAppTests {
         return (AppSettings(store: store, home: home, saveDelay: .milliseconds(10)), store)
     }
 
-    @Test func everyIndicatorStartsOffAndTheMenuBarHasOnlyTheHealthIcon() async throws {
+    @Test func everyIndicatorStartsOffAndTheMenuBarHasOnlyTheHealthIconAndTheCup() async throws {
         try await TemporaryDirectory.use { tmp in
             let (settings, _) = try makeSettings(tmp)
             #expect(settings.indicators.count == 8)
             #expect(settings.enabledIndicators.isEmpty)
+            #expect(settings.keepAwake.showInMenuBar)
+            settings.keepAwake.showInMenuBar = false
             #expect(settings.hasMenuBarContent == settings.showMenuBarExtra)
         }
     }
@@ -27,6 +29,7 @@ struct IndicatorSettingsAppTests {
         try await TemporaryDirectory.use { tmp in
             let (settings, _) = try makeSettings(tmp)
             settings.showMenuBarExtra = false
+            settings.keepAwake.showInMenuBar = false
             #expect(!settings.hasMenuBarContent)
             settings.updateIndicator(.network) { $0.enabled = true }
             #expect(settings.hasMenuBarContent)

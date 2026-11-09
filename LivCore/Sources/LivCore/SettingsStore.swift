@@ -2,7 +2,9 @@ import Foundation
 
 /// Reads and writes `Settings` as JSON. With no file URL it keeps nothing on disk, which previews and snapshots rely on.
 public struct SettingsStore: Sendable {
-    /// 2 added `dryRun`, 3 `installerFolders` and 4 the menu bar `indicators`; an older file simply lacks them and gets the defaults.
+    /// 2 added `dryRun`, 3 `installerFolders`, 4 the menu bar `indicators`; an older file simply lacks them and gets the defaults.
+    /// `keepAwake` is optional and older builds ignore unknown keys, so it needs no bump: a bump would make an older build
+    /// reject the whole file and save its defaults over every setting.
     public static let currentSchemaVersion = 4
 
     private let fileURL: URL?
@@ -43,6 +45,7 @@ public struct SettingsStore: Sendable {
         settings.installerFolders = stored.installerFolders ?? defaults.installerFolders
         settings.indicators = IndicatorSetting.normalized(stored.indicators?.compactMap(\.value))
         settings.indicatorRefresh = stored.indicatorRefresh.flatMap { IndicatorSetting.refreshChoices.contains($0) ? $0 : nil } ?? defaults.indicatorRefresh
+        settings.keepAwake = stored.keepAwake ?? defaults.keepAwake
         return settings
     }
 
@@ -75,5 +78,6 @@ public struct SettingsStore: Sendable {
         /// One unreadable entry (a metric from a future version) must not discard the whole file.
         var indicators: [Lossy]?
         var indicatorRefresh: Int?
+        var keepAwake: KeepAwakeSettings?
     }
 }

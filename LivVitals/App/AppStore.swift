@@ -16,6 +16,7 @@ final class AppStore {
     let monitor: MonitorModel
     let desktopWidgets: DesktopWidgetsModel
     let loginItem: LoginItemModel
+    let keepAwake: KeepAwakeModel
     let historyModel: HistoryModel
     @ObservationIgnored private var scanFlows: [AppModule: ScanFlowModel] = [:]
 
@@ -28,6 +29,7 @@ final class AppStore {
         monitor = MonitorModel(service: services.metrics)
         desktopWidgets = DesktopWidgetsModel(reporter: services.widgets)
         loginItem = LoginItemModel(controller: services.loginItem)
+        keepAwake = KeepAwakeModel(holder: services.keepAwake, conditions: services.keepAwakeConditions(), settings: settings.keepAwake)
         performance = PerformanceModel(runner: services.maintenance)
         performance.options = { MaintenanceOptions(dryRun: settings.dryRun) }
         adminRule = AdminRuleModel(privileged: services.privileged)
@@ -46,6 +48,7 @@ final class AppStore {
         )
         spaceLens.onCleaned = { [weak self] in self?.record($0) }
         settings.onIndicatorsChanged = { [weak self] in self?.syncIndicatorSampling() }
+        settings.onKeepAwakeChanged = { [weak self] in self.map { $0.keepAwake.apply($0.settings.keepAwake) } }
         syncIndicatorSampling()
     }
 

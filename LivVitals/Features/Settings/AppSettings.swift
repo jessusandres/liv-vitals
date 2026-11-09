@@ -17,6 +17,9 @@ final class AppSettings {
     var indicatorRefresh: Int { didSet { if indicatorRefresh != oldValue { changed(); onIndicatorsChanged?() } } }
     /// Called when the indicators or their refresh interval change, so sampling can follow.
     @ObservationIgnored var onIndicatorsChanged: (() -> Void)?
+    var keepAwake: KeepAwakeSettings { didSet { if keepAwake != oldValue { changed(); onKeepAwakeChanged?() } } }
+    /// Called when a keep-awake option changes, so the model can follow.
+    @ObservationIgnored var onKeepAwakeChanged: (() -> Void)?
     private(set) var protectedPaths: [String] { didSet { if protectedPaths != oldValue { changed() } } }
     private(set) var projectRoots: [String] { didSet { if projectRoots != oldValue { changed() } } }
     private(set) var installerFolders: [String] { didSet { if installerFolders != oldValue { changed() } } }
@@ -51,6 +54,7 @@ final class AppSettings {
         hasCompletedOnboarding = loaded.hasCompletedOnboarding
         indicators = loaded.indicators
         indicatorRefresh = loaded.indicatorRefresh
+        keepAwake = loaded.keepAwake
         protectedPaths = loaded.protectedPaths
         projectRoots = loaded.projectRoots
         installerFolders = loaded.installerFolders
@@ -74,6 +78,7 @@ final class AppSettings {
         settings.hasCompletedOnboarding = hasCompletedOnboarding
         settings.indicators = indicatorsToSave ?? indicators
         settings.indicatorRefresh = indicatorRefresh
+        settings.keepAwake = keepAwake
         return settings
     }
 
@@ -81,9 +86,9 @@ final class AppSettings {
 
     var enabledIndicators: [IndicatorSetting] { indicators.filter(\.enabled) }
 
-    /// True when anything of Liv Vitals sits in the menu bar: the health icon or at least one indicator. The login item,
+    /// True when anything of Liv Vitals sits in the menu bar: the health icon, the keep-awake cup or at least one indicator. The login item,
     /// hiding from the Dock and keeping the app alive after the window closes all depend on it.
-    var hasMenuBarContent: Bool { showMenuBarExtra || indicators.contains { $0.enabled } }
+    var hasMenuBarContent: Bool { showMenuBarExtra || keepAwake.showInMenuBar || indicators.contains { $0.enabled } }
 
     func indicator(_ metric: MetricKind) -> IndicatorSetting {
         indicators.first { $0.metric == metric } ?? IndicatorSetting(metric: metric)
@@ -178,6 +183,7 @@ final class AppSettings {
         hideFromDockWhenClosed = defaults.hideFromDockWhenClosed
         indicators = defaults.indicators
         indicatorRefresh = defaults.indicatorRefresh
+        keepAwake = defaults.keepAwake
         protectedPaths = defaults.protectedPaths
         projectRoots = defaults.projectRoots
         installerFolders = defaults.installerFolders

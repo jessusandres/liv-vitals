@@ -299,3 +299,38 @@ nonisolated struct MockLoginItemError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
 }
+
+/// Power assertions that only remember what they were told, so tests and snapshots never hold a real one.
+nonisolated final class MockPowerAssertions: PowerAssertionHolding {
+    private struct State {
+        var held = false
+        var acquired = 0
+        var released = 0
+        var failure: String?
+    }
+
+    private let state: OSAllocatedUnfairLock<State>
+
+    init(failure: String? = nil) {
+        state = OSAllocatedUnfairLock(initialState: State(failure: failure))
+    }
+
+    var isHeld: Bool { state.withLock { $0.held } }
+    /// How many times a real acquire happened (not counting repeats while held).
+    var acquireCount: Int { state.withLock { $0.acquired } }
+    var releaseCount: Int { state.withLock { $0.released } }
+    func setFailure(_ failure: String?) { state.withLock { $0.failure = failure } }
+
+    func acquire(reason: String) throws {
+        try state.withLock { state in
+            if let failure = state.failure { throw MockLoginItemError(message: failure) }
+            if !state.held { state.held = true; state.acquired += 1 }
+        }
+    }
+
+    func release() {
+        state.withLock { state in
+            if state.held { state.held = false; state.released += 1 }
+        }
+    }
+}
