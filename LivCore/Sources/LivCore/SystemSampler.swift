@@ -30,7 +30,8 @@ public struct SystemSampler: MetricsSampling {
             gpu: SystemReaders.gpu(),
             diskCounters: SystemReaders.diskCounters(),
             // A panel (processes on) also gets the GPU, the battery and the sensor list.
-            temperature: temperatures?.read(detailed: includeProcesses, includeGPU: gpuTemperature)
+            temperature: temperatures?.read(detailed: includeProcesses, includeGPU: gpuTemperature),
+            networkInterface: includeProcesses ? NetworkInterfaceInfo.current() : nil
         )
     }
 

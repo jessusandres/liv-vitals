@@ -221,16 +221,20 @@ nonisolated struct FakeMaintenance: MaintenanceRunning {
 nonisolated final class FakeCommands: CommandRunning, Sendable {
     private struct State {
         var calls: [String] = []
+        var runs: [String: Int] = [:]
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
     /// The result for a program, by its path; anything else answers status 0.
     let results: [String: CommandResult]
+    /// Results for a program, one per run in order; the last one repeats. Wins over `results`.
+    let sequences: [String: [CommandResult]]
     /// Programs whose run throws.
     let throwing: Set<String>
 
-    init(results: [String: CommandResult] = [:], throwing: Set<String> = []) {
+    init(results: [String: CommandResult] = [:], sequences: [String: [CommandResult]] = [:], throwing: Set<String> = []) {
         self.results = results
+        self.sequences = sequences
         self.throwing = throwing
     }
 
@@ -238,8 +242,13 @@ nonisolated final class FakeCommands: CommandRunning, Sendable {
     var calls: [String] { state.withLock { $0.calls } }
 
     func run(_ executable: String, _ arguments: [String], timeout: Duration) async throws -> CommandResult {
-        state.withLock { $0.calls.append(([executable] + arguments).joined(separator: " ")) }
+        let run = state.withLock { state in
+            state.calls.append(([executable] + arguments).joined(separator: " "))
+            defer { state.runs[executable, default: 0] += 1 }
+            return state.runs[executable, default: 0]
+        }
         if throwing.contains(executable) { throw FakeFailure() }
+        if let sequence = sequences[executable], !sequence.isEmpty { return sequence[min(run, sequence.count - 1)] }
         return results[executable] ?? CommandResult(status: 0)
     }
 }
