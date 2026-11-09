@@ -41,6 +41,8 @@ struct SettingsView: View {
                     }
                 }
 
+                KeepAwakeSettingsSection(settings: settings, model: store.keepAwake)
+
                 IndicatorsSettingsSection(settings: settings, monitor: store.monitor)
                 DesktopWidgetsSettingsSection(monitor: store.monitor, model: store.desktopWidgets)
 

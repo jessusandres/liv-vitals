@@ -69,3 +69,17 @@ extension IndicatorTint {
         }
     }
 }
+
+extension KeepAwakeDuration {
+    var localizedTitle: String {
+        switch self {
+        case .fifteenMinutes: String(localized: "15 minutes")
+        case .thirtyMinutes: String(localized: "30 minutes")
+        case .oneHour: String(localized: "1 hour")
+        case .twoHours: String(localized: "2 hours")
+        case .fourHours: String(localized: "4 hours")
+        case .eightHours: String(localized: "8 hours")
+        case .indefinite: String(localized: "Indefinite")
+        }
+    }
+}

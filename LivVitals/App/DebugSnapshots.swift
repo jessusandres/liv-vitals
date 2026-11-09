@@ -157,6 +157,22 @@ enum DebugSnapshots {
                     .background(.background)
             )
         }),
+        // Keep Awake alone: a 2-hour session, two conditions on and the app list open.
+        Scenario(name: "10c-settings-keep-awake", module: .settings, view: {
+            let store = AppStore(services: .mock)
+            store.settings.keepAwake.externalDisplay = true
+            store.settings.keepAwake.applications = true
+            store.settings.keepAwake.bundleIDs = ["com.apple.Safari", "com.apple.dt.Xcode", "com.example.Removed"]
+            store.keepAwake.start(.twoHours)
+            return AnyView(
+                Form { KeepAwakeSettingsSection(settings: store.settings, model: store.keepAwake) }
+                    .formStyle(.grouped)
+                    .scrollContentBackground(.hidden)
+                    .padding(28)
+                    .background(.background)
+                    .frame(width: 900, height: 640)
+            )
+        }),
         Scenario(name: "11a-onboarding-welcome", module: .settings, view: onboarding(.welcome)),
         Scenario(name: "11b-onboarding-full-disk-access", module: .settings, view: onboarding(.fullDiskAccess)),
         Scenario(name: "11c-onboarding-app-management", module: .settings, view: onboarding(.appManagement)),

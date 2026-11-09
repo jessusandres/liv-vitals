@@ -225,3 +225,12 @@ nonisolated protocol LoginItemControlling: Sendable {
     func setEnabled(_ enabled: Bool) throws
     func openSystemSettings()
 }
+
+/// The two IOKit assertions that keep the Mac and its display from idle-sleeping. Tests and snapshots use a fake,
+/// so they never hold a real one.
+nonisolated protocol PowerAssertionHolding: Sendable {
+    var isHeld: Bool { get }
+    /// Takes both assertions, or none: a failure releases whatever was taken. Already held does nothing.
+    func acquire(reason: String) throws
+    func release()
+}

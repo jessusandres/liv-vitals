@@ -17,6 +17,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var indicators: [IndicatorSetting] = IndicatorSetting.defaults
     /// Seconds between readings while an indicator is showing; one of `IndicatorSetting.refreshChoices`.
     public var indicatorRefresh = IndicatorSetting.defaultRefresh
+    /// Keep awake: the cup in the menu bar, automation and pause while locked.
+    public var keepAwake = KeepAwakeSettings()
     /// Folders that cleaning never scans or removes.
     public var protectedPaths: [String]
     /// Folders where Dev Projects looks for build artifacts.

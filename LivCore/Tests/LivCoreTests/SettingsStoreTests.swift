@@ -165,4 +165,40 @@ struct SettingsStoreTests {
             #expect(!store.load().hideFromDockWhenClosed)
         }
     }
+
+    @Test func aVersion4FileGetsTheKeepAwakeDefaults() async throws {
+        try await TemporaryDirectory.use { tmp in
+            let (store, file, home) = try makeStore(tmp)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(#"{"schemaVersion":4,"moveToTrash":false}"#.utf8).write(to: file)
+            #expect(store.load().keepAwake == Settings.defaults(home: home).keepAwake)
+        }
+    }
+
+    @Test func aBadKeepAwakeDurationKeepsTheOtherFields() async throws {
+        try await TemporaryDirectory.use { tmp in
+            let (store, file, _) = try makeStore(tmp)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(#"{"schemaVersion":4,"keepAwake":{"defaultDuration":"soon","power":true,"bundleIDs":["a.b"]}}"#.utf8).write(to: file)
+            let keepAwake = store.load().keepAwake
+            #expect(keepAwake.defaultDuration == .oneHour)
+            #expect(keepAwake.power)
+            #expect(keepAwake.bundleIDs == ["a.b"])
+        }
+    }
+
+    @Test func keepAwakeSettingsSurviveARoundTrip() async throws {
+        try await TemporaryDirectory.use { tmp in
+            let (store, _, home) = try makeStore(tmp)
+            var settings = Settings.defaults(home: home)
+            settings.keepAwake.defaultDuration = .indefinite
+            settings.keepAwake.externalDisplay = true
+            settings.keepAwake.applications = true
+            settings.keepAwake.bundleIDs = ["com.apple.dt.Xcode"]
+            settings.keepAwake.pauseWhileLocked = true
+            settings.keepAwake.showInMenuBar = false
+            try store.save(settings)
+            #expect(store.load().keepAwake == settings.keepAwake)
+        }
+    }
 }

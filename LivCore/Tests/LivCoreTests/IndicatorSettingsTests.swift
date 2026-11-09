@@ -115,7 +115,7 @@ struct IndicatorSettingsTests {
     @Test func aFileFromANewerVersionIsStillIgnored() async throws {
         try await TemporaryDirectory.use { tmp in
             let (store, file, home) = try makeStore(tmp)
-            try Data(#"{"schemaVersion":5,"indicatorRefresh":10}"#.utf8).write(to: file)
+            try Data(#"{"schemaVersion":6,"indicatorRefresh":10}"#.utf8).write(to: file)
             #expect(store.load() == Settings.defaults(home: home))
         }
     }

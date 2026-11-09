@@ -24,6 +24,9 @@ struct ServiceContainer: Sendable {
     var labelsSimulatedData: Bool
     /// Which desktop widgets are added, and the button that reloads them. Only the real Mac answers.
     var widgets: any WidgetInstallationReporting = UnavailableWidgetInstallations()
+    /// Keep awake's power assertions and the events that decide when it runs. The defaults hold nothing and hear nothing.
+    var keepAwake: any PowerAssertionHolding = MockPowerAssertions()
+    var keepAwakeConditions: @MainActor @Sendable () -> any KeepAwakeConditionSource = { MockKeepAwakeConditions() }
 
     /// Real where a real service exists; the rest stays simulated and is labelled until its stage lands.
     /// Cleanup and Space Lens act on real files here.
@@ -46,7 +49,9 @@ struct ServiceContainer: Sendable {
             settingsStore: .standard(home: home),
             home: home,
             labelsSimulatedData: true,
-            widgets: SystemWidgetInstallations()
+            widgets: SystemWidgetInstallations(),
+            keepAwake: LivePowerAssertions(),
+            keepAwakeConditions: { LiveKeepAwakeConditions() }
         )
     }
 
