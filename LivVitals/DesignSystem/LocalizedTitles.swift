@@ -38,6 +38,7 @@ extension MetricKind {
         case .diskActivity: String(localized: "Disk Activity")
         case .network: String(localized: "Network")
         case .battery: String(localized: "Battery")
+        case .temperature: String(localized: "Temperature")
         }
     }
 }

@@ -17,7 +17,7 @@ struct IndicatorSettingsAppTests {
     @Test func everyIndicatorStartsOffAndTheMenuBarHasOnlyTheHealthIcon() async throws {
         try await TemporaryDirectory.use { tmp in
             let (settings, _) = try makeSettings(tmp)
-            #expect(settings.indicators.count == 7)
+            #expect(settings.indicators.count == 8)
             #expect(settings.enabledIndicators.isEmpty)
             #expect(settings.hasMenuBarContent == settings.showMenuBarExtra)
         }

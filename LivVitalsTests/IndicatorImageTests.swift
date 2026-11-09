@@ -61,17 +61,31 @@ struct IndicatorImageTests {
         #expect(IndicatorGeometry.sparkline(values: [1, 2], ceiling: 0, in: size).isEmpty)
     }
 
-    @Test func aWiderTextMakesAWiderImageAndHidingTheLabelMakesItNarrower() {
+    @Test func aWiderTextMakesAWiderImage() {
         let short = IndicatorValue(text: "5%", fraction: 0.05, chartValue: 5, spoken: "")
         let long = IndicatorValue(text: "100%", fraction: 1, chartValue: 100, spoken: "")
         let setting = IndicatorSetting(metric: .battery, enabled: true, style: .number)
-        var noLabel = setting
-        noLabel.showLabel = false
         let narrow = IndicatorImageRenderer.image(for: setting, value: short, history: []).size.width
         let wide = IndicatorImageRenderer.image(for: setting, value: long, history: []).size.width
-        let bare = IndicatorImageRenderer.image(for: noLabel, value: long, history: []).size.width
         #expect(wide > narrow)
-        #expect(bare < wide)
+    }
+
+    @Test func theLabelSitsAboveTheValueAndTheTemperatureWidensTheImage() {
+        let plain = IndicatorValue(text: "19%", fraction: 0.19, chartValue: 19, spoken: "")
+        let hot = IndicatorValue(text: "19% 78°", temperatureText: "78°", fraction: 0.19, chartValue: 19, spoken: "")
+        let setting = IndicatorSetting(metric: .cpu, enabled: true, style: .number)
+        var noLabel = setting
+        noLabel.showLabel = false
+        let stacked = IndicatorImageRenderer.image(for: setting, value: plain, history: [])
+        let inline = IndicatorImageRenderer.image(for: noLabel, value: plain, history: [])
+        // Stacked, the label no longer adds to the width: the image is as wide as its widest line.
+        #expect(stacked.size.width <= inline.size.width)
+        #expect(stacked.size.height == IndicatorImageRenderer.height)
+        #expect(IndicatorImageRenderer.image(for: setting, value: hot, history: []).size.width > stacked.size.width)
+        var chart = setting
+        chart.style = .chart
+        #expect(IndicatorImageRenderer.image(for: chart, value: hot, history: [1, 2]).size.width
+            > IndicatorImageRenderer.image(for: chart, value: plain, history: [1, 2]).size.width)
     }
 
     /// The old SwiftUI renderer made the GPU renderer hold ~110 MB for the first minute; the images are drawn with Core

@@ -108,11 +108,16 @@ nonisolated protocol MetricsProviding: Sendable {
     var isSimulated: Bool { get }
 
     /// A snapshot every `interval` until the consumer stops listening; stopping also stops the sampling. Without
-    /// processes nothing like `top` is started, which is what the menu bar indicators want.
-    func snapshots(every interval: Duration, includeProcesses: Bool) -> AsyncStream<MetricsSnapshot>
+    /// processes nothing like `top` is started, which is what the menu bar indicators want. Temperature sensors are
+    /// read only when `includeTemperature` is true; the GPU's also in a light stream when `includeGPUTemperature` is.
+    func snapshots(every interval: Duration, includeProcesses: Bool, includeTemperature: Bool, includeGPUTemperature: Bool) -> AsyncStream<MetricsSnapshot>
 }
 
 extension MetricsProviding {
+    nonisolated func snapshots(every interval: Duration, includeProcesses: Bool) -> AsyncStream<MetricsSnapshot> {
+        snapshots(every: interval, includeProcesses: includeProcesses, includeTemperature: false, includeGPUTemperature: false)
+    }
+
     nonisolated func snapshots(every interval: Duration) -> AsyncStream<MetricsSnapshot> {
         snapshots(every: interval, includeProcesses: true)
     }

@@ -166,6 +166,7 @@ nonisolated struct MockMetrics: MetricsProviding {
         var upload = 0.6
         var memoryGB = 10.4
         var battery = 0.78
+        var temperature = 52.0
         var processes: [(pid: Int32, name: String, cpu: Double, memoryMB: Double)] = [
             (101, "Xcode", 34, 3_100),
             (102, "Google Chrome Helper", 18, 1_450),
@@ -178,12 +179,13 @@ nonisolated struct MockMetrics: MetricsProviding {
             min(range.upperBound, max(range.lowerBound, value + .random(in: -size...size)))
         }
 
-        mutating func next() -> MetricsSnapshot {
+        mutating func next(includeTemperature: Bool) -> MetricsSnapshot {
             cpu = step(cpu, 9, 4...96)
             download = step(download, 1.2, 0.1...14)
             upload = step(upload, 0.4, 0.05...4)
             memoryGB = step(memoryGB, 0.15, 8...14.5)
             battery = max(0.05, battery - 0.0003)
+            temperature = step(temperature, 2, 35...95)
             for index in processes.indices { processes[index].cpu = step(processes[index].cpu, 3, 0.5...60) }
 
             let memory = MemoryReading(
@@ -196,6 +198,7 @@ nonisolated struct MockMetrics: MetricsProviding {
                 cachedBytes: 4 * 1_073_741_824
             )
             let disk = DiskReading(totalBytes: 494_000_000_000, availableBytes: 82_000_000_000)
+            let usages = processes.map { ProcessUsage(pid: $0.pid, name: $0.name, cpuPercent: $0.cpu, memoryBytes: UInt64($0.memoryMB * 1_048_576)) }
             return MetricsSnapshot(
                 date: .now,
                 cpu: cpu / 100,
@@ -205,22 +208,22 @@ nonisolated struct MockMetrics: MetricsProviding {
                 downloadBytesPerSecond: download * 1_000_000,
                 uploadBytesPerSecond: upload * 1_000_000,
                 battery: BatteryReading(level: battery, isCharging: false, isOnACPower: false, cycleCount: 212, health: 0.91),
-                topProcesses: processes
-                    .map { ProcessUsage(pid: $0.pid, name: $0.name, cpuPercent: $0.cpu, memoryBytes: UInt64($0.memoryMB * 1_048_576)) }
-                    .sorted { $0.cpuPercent > $1.cpuPercent },
-                health: HealthScore.compute(cpu: cpu / 100, memoryPressure: memory.pressure, diskUsedFraction: disk.usedFraction)
+                topProcesses: usages.sorted { $0.cpuPercent > $1.cpuPercent },
+                health: HealthScore.compute(cpu: cpu / 100, memoryPressure: memory.pressure, diskUsedFraction: disk.usedFraction),
+                temperature: includeTemperature ? TemperatureReading(cpu: temperature, gpu: temperature - 6, battery: 31) : nil,
+                topMemoryProcesses: usages.sorted { $0.memoryBytes > $1.memoryBytes }
             )
         }
     }
 
-    func snapshots(every interval: Duration, includeProcesses: Bool) -> AsyncStream<MetricsSnapshot> {
+    func snapshots(every interval: Duration, includeProcesses: Bool, includeTemperature: Bool, includeGPUTemperature: Bool) -> AsyncStream<MetricsSnapshot> {
         AsyncStream { continuation in
             let task = Task {
                 var walk = Walk()
-                for _ in 0..<60 { continuation.yield(walk.next()) }
+                for _ in 0..<60 { continuation.yield(walk.next(includeTemperature: includeTemperature)) }
                 while !Task.isCancelled {
                     try? await Task.sleep(for: interval)
-                    continuation.yield(walk.next())
+                    continuation.yield(walk.next(includeTemperature: includeTemperature))
                 }
                 continuation.finish()
             }

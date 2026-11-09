@@ -59,6 +59,16 @@
         }
       }
     },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%@, %lld items" : {
       "localizations" : {
         "en" : {
@@ -568,11 +578,13 @@
     },
     "(%lld)" : {},
     "1. Right-click the desktop (or click the date in the menu bar to open Notification Center)." : {},
+    "100%" : {},
     "2. Choose Edit Widgets." : {},
     "3. Search for Liv Vitals." : {},
     "4. Pick Battery Health, Storage or Device, then click it or drag it onto the desktop." : {},
     "A few maintenance tasks need administrator rights and ask for your password each time. You can add one sudo rule that allows exactly those commands without a password. Nothing is installed unless you choose it, and you can remove the rule at any time in Settings." : {},
     "About Liv Vitals" : {},
+    "Activity" : {},
     "Add" : {},
     "Added" : {},
     "Admin" : {},
@@ -592,6 +604,7 @@
     "Apps sorted by size and last use" : {},
     "Automatic" : {},
     "Available" : {},
+    "Average" : {},
     "Average (10 s)" : {},
     "Back" : {},
     "Bars" : {},
@@ -672,6 +685,7 @@
     "Full Disk Access" : {},
     "Full Disk Access is needed to empty the Trash." : {},
     "GPU" : {},
+    "GPUs" : {},
     "Gauge" : {},
     "Go up" : {},
     "Good" : {},
@@ -692,6 +706,7 @@
     "Its program is gone; the app was probably removed." : {},
     "Label" : {},
     "Large Files" : {},
+    "Last minute" : {},
     "Last use unknown" : {},
     "Leave projects edited in the last 7 days unchecked" : {},
     "Left where they are" : {},
@@ -705,12 +720,14 @@
     "Liv Vitals never removes anything inside these folders, and cleaning scans skip them." : {},
     "Live view of CPU, memory, disk, network and battery." : {},
     "Load" : {},
+    "Loading…" : {},
     "Logs" : {},
     "Looking through %@ locations" : {},
     "MB/s" : {},
     "Mac Health" : {},
     "Maintenance" : {},
     "Maintenance: %@" : {},
+    "Maximum" : {},
     "Measuring your home folder…" : {},
     "Memory" : {},
     "Menu Bar" : {},
@@ -728,6 +745,7 @@
     "No build folders or dependencies were found in your project folders." : {},
     "No longer in the Trash" : {},
     "No password needed." : {},
+    "No sensor details available." : {},
     "None of your project folders exist yet." : {},
     "Normal" : {},
     "Not added" : {},
@@ -750,6 +768,7 @@
     "Open System Settings" : {},
     "Open folder" : {},
     "Orange" : {},
+    "Peak" : {},
     "Performance" : {},
     "Permissions" : {},
     "Pink" : {},
@@ -857,6 +876,7 @@
     "Select items to clean." : {},
     "Selected items are deleted permanently." : {},
     "Selected items go to the Trash." : {},
+    "Sensors" : {},
     "Settings" : {},
     "Show Liv Vitals in the menu bar" : {},
     "Show Welcome Guide" : {},
@@ -890,8 +910,11 @@
       }
     },
     "Stop" : {},
+    "Storage" : {},
     "Style" : {},
     "Teal" : {},
+    "Temperature" : {},
+    "Temperatures are not available on this Mac." : {},
     "The details of this cleanup are loading." : {},
     "The log shows what would have happened." : {},
     "The password was not entered." : {},
@@ -905,6 +928,7 @@
     "Tiler" : {},
     "Time" : {},
     "Top Processes" : {},
+    "Top apps" : {},
     "Total" : {},
     "Total freed" : {},
     "Trash" : {},

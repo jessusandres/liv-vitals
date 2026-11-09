@@ -164,7 +164,7 @@ struct MonitorView: View {
     private var processesCard: some View {
         MetricCard(title: "Top Processes", systemImage: "list.bullet", value: "") {
             VStack(spacing: 6) {
-                ForEach(model.processes) { process in
+                ForEach(model.processes.prefix(5)) { process in
                     HStack {
                         SystemIcon(image: model.icons.icon(for: process), size: 16)
                         Text(process.name).lineLimit(1)

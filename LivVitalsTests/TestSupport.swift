@@ -469,7 +469,7 @@ nonisolated final class FakeMetrics: MetricsProviding, Sendable {
         var continuations: [AsyncStream<MetricsSnapshot>.Continuation] = []
         var started = 0
         var terminated = 0
-        var requests: [(interval: Duration, includeProcesses: Bool)] = []
+        var requests: [(interval: Duration, includeProcesses: Bool, includeTemperature: Bool, includeGPUTemperature: Bool)] = []
     }
 
     let isSimulated = false
@@ -479,14 +479,14 @@ nonisolated final class FakeMetrics: MetricsProviding, Sendable {
     var terminated: Int { state.withLock { $0.terminated } }
 
     /// What each opened stream asked for, in order.
-    var requests: [(interval: Duration, includeProcesses: Bool)] { state.withLock { $0.requests } }
+    var requests: [(interval: Duration, includeProcesses: Bool, includeTemperature: Bool, includeGPUTemperature: Bool)] { state.withLock { $0.requests } }
 
-    func snapshots(every interval: Duration, includeProcesses: Bool) -> AsyncStream<MetricsSnapshot> {
+    func snapshots(every interval: Duration, includeProcesses: Bool, includeTemperature: Bool, includeGPUTemperature: Bool) -> AsyncStream<MetricsSnapshot> {
         AsyncStream { continuation in
             state.withLock {
                 $0.continuations.append(continuation)
                 $0.started += 1
-                $0.requests.append((interval, includeProcesses))
+                $0.requests.append((interval, includeProcesses, includeTemperature, includeGPUTemperature))
             }
             continuation.onTermination = { [state] _ in state.withLock { $0.terminated += 1 } }
         }

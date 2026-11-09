@@ -23,6 +23,8 @@ final class MonitorModel {
     /// Megabytes per second.
     private(set) var download: [Sample] = []
     private(set) var upload: [Sample] = []
+    /// Folds that are open in the menu bar panels, as `"<metric>.<section>"`. Kept while the app runs, not saved.
+    var expandedPanelSections: Set<String> = []
 
     @ObservationIgnored private let service: any MetricsProviding
     @ObservationIgnored private var watchers = 0
@@ -38,12 +40,15 @@ final class MonitorModel {
 
     private enum Mode: Equatable {
         /// A window or panel is open: every second, with the busiest processes.
-        case full
+        case full(temperature: Bool, gpu: Bool)
         /// Only menu bar indicators are showing: slower, and no `top` process.
-        case light(Duration)
+        case light(Duration, temperature: Bool, gpu: Bool)
     }
 
     @ObservationIgnored private var indicatorInterval: Duration?
+    /// Sensors are read only while the temperature indicator is on.
+    @ObservationIgnored private var indicatorTemperature = false
+    @ObservationIgnored private var indicatorGPUTemperature = false
     @ObservationIgnored private var mode: Mode?
 
     /// Recent values of every metric, for chart-style indicators and the panels. Percent for most, bytes per second for
@@ -64,13 +69,17 @@ final class MonitorModel {
     }
 
     /// Menu bar indicators keep the readings coming at this interval while they are showing; nil when none is.
-    func setIndicatorRefresh(seconds: Int?) {
+    func setIndicatorRefresh(seconds: Int?, temperature: Bool = false, gpuTemperature: Bool = false) {
         indicatorInterval = seconds.map { .seconds($0) }
+        indicatorTemperature = temperature
+        indicatorGPUTemperature = gpuTemperature
         updateSampling()
     }
 
     private func updateSampling() {
-        let wanted: Mode? = watchers > 0 ? .full : indicatorInterval.map { .light($0) }
+        let wanted: Mode? = watchers > 0
+            ? .full(temperature: indicatorTemperature, gpu: indicatorGPUTemperature)
+            : indicatorInterval.map { .light($0, temperature: indicatorTemperature, gpu: indicatorGPUTemperature) }
         guard wanted != mode else { return }
         work?.cancel()
         work = nil
@@ -79,8 +88,10 @@ final class MonitorModel {
         // Opened here, not inside the task, so sampling has begun by the time this returns. A stream that replaces
         // another starts with no rates (the first reading has nothing to compare with), so its first snapshot is skipped.
         let stream = switch wanted {
-        case .full: service.snapshots(every: .seconds(1), includeProcesses: true)
-        case .light(let interval): service.snapshots(every: interval, includeProcesses: false)
+        case .full(let temperature, let gpu):
+            service.snapshots(every: .seconds(1), includeProcesses: true, includeTemperature: temperature, includeGPUTemperature: gpu)
+        case .light(let interval, let temperature, let gpu):
+            service.snapshots(every: interval, includeProcesses: false, includeTemperature: temperature, includeGPUTemperature: gpu)
         }
         let replacesAReading = latest != nil
         work = Task {
@@ -99,7 +110,7 @@ final class MonitorModel {
     private func apply(_ snapshot: MetricsSnapshot) {
         latest = snapshot
         // Light readings carry no processes; keep the last list instead of emptying the Monitor between two modes.
-        if !snapshot.topProcesses.isEmpty { icons.keep(only: Set(snapshot.topProcesses.map(\.pid))) }
+        if !snapshot.topProcesses.isEmpty { icons.keep(only: Set((snapshot.topProcesses + snapshot.topMemoryProcesses).map(\.pid))) }
         sampleCount += 1
         append(&cpu, snapshot.cpu * 100)
         append(&download, snapshot.downloadBytesPerSecond / 1_000_000)
@@ -149,6 +160,7 @@ final class MonitorModel {
 
     var battery: BatteryReading? { latest?.battery }
     var processes: [ProcessUsage] { latest?.topProcesses ?? [] }
+    var memoryProcesses: [ProcessUsage] { latest?.topMemoryProcesses ?? [] }
 
     var healthScore: Int { latest?.health ?? 100 }
     var healthTitle: String { HealthScore.level(for: healthScore).localizedTitle }

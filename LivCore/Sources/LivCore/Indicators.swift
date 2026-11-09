@@ -4,7 +4,7 @@ import Foundation
 // the three places cannot disagree (the Stage 10 problem). Pure: no UI, no system calls.
 
 public enum MetricKind: String, CaseIterable, Codable, Sendable, Identifiable {
-    case cpu, memory, gpu, disk, diskActivity, network, battery
+    case cpu, memory, gpu, disk, diskActivity, network, battery, temperature
 
     public var id: String { rawValue }
 
@@ -17,6 +17,7 @@ public enum MetricKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .diskActivity: "Disk Activity"
         case .network: "Network"
         case .battery: "Battery"
+        case .temperature: "Temperature"
         }
     }
 
@@ -30,6 +31,7 @@ public enum MetricKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .diskActivity: "I/O"
         case .network: "NET"
         case .battery: "BAT"
+        case .temperature: "TMP"
         }
     }
 
@@ -42,6 +44,7 @@ public enum MetricKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .diskActivity: "internaldrive.fill"
         case .network: "network"
         case .battery: "battery.100percent"
+        case .temperature: "thermometer.medium"
         }
     }
 
@@ -49,7 +52,8 @@ public enum MetricKind: String, CaseIterable, Codable, Sendable, Identifiable {
     public var isThroughput: Bool { self == .network || self == .diskActivity }
 
     public var styles: [IndicatorStyle] {
-        isThroughput ? [.speed, .chart, .number, .icon] : [.number, .chart, .bars, .gauge, .icon]
+        if self == .temperature { return [.number, .chart, .icon] }
+        return isThroughput ? [.speed, .chart, .number, .icon] : [.number, .chart, .bars, .gauge, .icon]
     }
 
     public var defaultStyle: IndicatorStyle { isThroughput ? .speed : (self == .cpu ? .chart : .number) }
@@ -88,6 +92,11 @@ public struct IndicatorSetting: Codable, Sendable, Hashable, Identifiable {
     public var tint: IndicatorTint
     public var showLabel: Bool
     public var showIcon: Bool
+    /// Only for CPU and GPU: the temperature after the usage (`19% 78°`).
+    public var showTemperature: Bool
+
+    /// True when this indicator is on and draws a temperature, so the sensors have to be read.
+    public var wantsTemperature: Bool { enabled && showTemperature && (metric == .cpu || metric == .gpu) }
 
     public var id: MetricKind { metric }
 
@@ -97,7 +106,8 @@ public struct IndicatorSetting: Codable, Sendable, Hashable, Identifiable {
         style: IndicatorStyle? = nil,
         tint: IndicatorTint = .system,
         showLabel: Bool = true,
-        showIcon: Bool = false
+        showIcon: Bool = false,
+        showTemperature: Bool = true
     ) {
         self.metric = metric
         self.enabled = enabled
@@ -105,6 +115,7 @@ public struct IndicatorSetting: Codable, Sendable, Hashable, Identifiable {
         self.tint = tint
         self.showLabel = showLabel
         self.showIcon = showIcon
+        self.showTemperature = showTemperature
     }
 
     /// A file written by another version may lack fields, or name a style this metric does not offer.
@@ -118,11 +129,12 @@ public struct IndicatorSetting: Codable, Sendable, Hashable, Identifiable {
             style: style.flatMap { metric.styles.contains($0) ? $0 : nil },
             tint: (try? values.decodeIfPresent(IndicatorTint.self, forKey: .tint)) ?? .system,
             showLabel: (try? values.decodeIfPresent(Bool.self, forKey: .showLabel)) ?? true,
-            showIcon: (try? values.decodeIfPresent(Bool.self, forKey: .showIcon)) ?? false
+            showIcon: (try? values.decodeIfPresent(Bool.self, forKey: .showIcon)) ?? false,
+            showTemperature: (try? values.decodeIfPresent(Bool.self, forKey: .showTemperature)) ?? true
         )
     }
 
-    /// All seven metrics, once each and in the standard order, whatever the stored list held.
+    /// Every metric, once each and in the standard order, whatever the stored list held.
     public static func normalized(_ stored: [IndicatorSetting]?) -> [IndicatorSetting] {
         MetricKind.allCases.map { metric in
             stored?.first { $0.metric == metric } ?? IndicatorSetting(metric: metric)
@@ -140,6 +152,8 @@ public struct IndicatorSetting: Codable, Sendable, Hashable, Identifiable {
 public struct IndicatorValue: Sendable, Equatable {
     /// `21%`, `↓ 1.2 MB/s`, or `—` when the machine does not give the reading.
     public var text: String
+    /// `78°` for a CPU or GPU indicator that shows its temperature (already part of `text`); charts, bars and gauges draw it after the graphic.
+    public var temperatureText: String?
     /// Second line of the speed style (`↑ 340 KB/s`).
     public var secondary: String?
     /// 0...1 for gauges and bars; nil for speeds and missing readings.
@@ -151,8 +165,9 @@ public struct IndicatorValue: Sendable, Equatable {
 
     public var isAvailable: Bool { text != IndicatorFormatter.missing }
 
-    public init(text: String, secondary: String? = nil, fraction: Double? = nil, chartValue: Double = 0, spoken: String) {
+    public init(text: String, temperatureText: String? = nil, secondary: String? = nil, fraction: Double? = nil, chartValue: Double = 0, spoken: String) {
         self.text = text
+        self.temperatureText = temperatureText
         self.secondary = secondary
         self.fraction = fraction
         self.chartValue = chartValue
@@ -163,7 +178,20 @@ public struct IndicatorValue: Sendable, Equatable {
 public enum IndicatorFormatter {
     public static let missing = "—"
 
-    public static func value(_ metric: MetricKind, from snapshot: MetricsSnapshot?) -> IndicatorValue {
+    /// With `showTemperature`, the CPU and GPU readings carry their temperature when the machine gives one; no dash otherwise.
+    public static func value(_ metric: MetricKind, from snapshot: MetricsSnapshot?, showTemperature: Bool = false) -> IndicatorValue {
+        var value = usage(metric, from: snapshot)
+        guard showTemperature, value.isAvailable,
+              let celsius = metric == .cpu ? snapshot?.temperature?.cpu : metric == .gpu ? snapshot?.temperature?.gpu : nil
+        else { return value }
+        let degrees = Int(celsius.rounded())
+        value.temperatureText = "\(degrees)°"
+        value.text += " \(degrees)°"
+        value.spoken += ", \(degrees) degrees Celsius"
+        return value
+    }
+
+    private static func usage(_ metric: MetricKind, from snapshot: MetricsSnapshot?) -> IndicatorValue {
         guard let snapshot else { return unavailable(metric) }
         switch metric {
         case .cpu:
@@ -204,6 +232,10 @@ public enum IndicatorFormatter {
             let state = battery.isCharging ? "charging" : battery.isOnACPower ? "on power adapter" : "on battery"
             value.spoken = "Battery, \(Int((battery.level * 100).rounded())) percent, \(state)"
             return value
+        case .temperature:
+            guard let celsius = snapshot.temperature?.cpu else { return unavailable(metric) }
+            let degrees = Int(celsius.rounded())
+            return IndicatorValue(text: "\(degrees)°", chartValue: celsius, spoken: "Temperature, \(degrees) degrees Celsius")
         }
     }
 

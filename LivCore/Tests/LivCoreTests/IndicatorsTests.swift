@@ -45,6 +45,41 @@ struct IndicatorFormatterTests {
         #expect(io.secondary == "W 340 KB/s")
     }
 
+    @Test func cpuAndGpuShowTheirTemperatureNextToTheUsage() {
+        var snap = snapshot()
+        snap.temperature = TemperatureReading(cpu: 78.4, gpu: 51.2)
+        let cpu = IndicatorFormatter.value(.cpu, from: snap, showTemperature: true)
+        #expect(cpu.text == "21% 78°")
+        #expect(cpu.temperatureText == "78°")
+        #expect(cpu.spoken == "Processor, 21 percent, 78 degrees Celsius")
+        #expect(IndicatorFormatter.value(.gpu, from: snap, showTemperature: true).text == "12% 51°")
+        #expect(IndicatorFormatter.value(.cpu, from: snap).text == "21%")
+        #expect(IndicatorFormatter.value(.memory, from: snap, showTemperature: true).text == "78%")
+    }
+
+    @Test func aMissingTemperatureLeavesJustTheUsage() {
+        var snap = snapshot()
+        #expect(IndicatorFormatter.value(.cpu, from: snap, showTemperature: true).text == "21%")
+        snap.temperature = TemperatureReading(cpu: 60)
+        let gpu = IndicatorFormatter.value(.gpu, from: snap, showTemperature: true)
+        #expect(gpu.text == "12%")
+        #expect(gpu.temperatureText == nil)
+        #expect(IndicatorFormatter.value(.gpu, from: snapshot(gpu: nil), showTemperature: true).text == "—")
+    }
+
+    @Test func temperatureShowsTheCpuInWholeDegrees() {
+        var snap = snapshot()
+        snap.temperature = TemperatureReading(cpu: 58.6, gpu: 50, battery: nil)
+        let value = IndicatorFormatter.value(.temperature, from: snap)
+        #expect(value.text == "59°")
+        #expect(value.fraction == nil)
+        #expect(value.chartValue == 58.6)
+        #expect(value.spoken == "Temperature, 59 degrees Celsius")
+        #expect(IndicatorFormatter.value(.temperature, from: snapshot()).text == "—")
+        #expect(MetricKind.temperature.styles == [.number, .chart, .icon])
+        #expect(MetricKind.temperature.shortTitle == "TMP")
+    }
+
     @Test func aMissingReadingIsADashNeverAZero() {
         let snap = snapshot(battery: nil, gpu: nil, diskActivity: nil)
         for metric in [MetricKind.battery, .gpu, .diskActivity] {
@@ -89,12 +124,12 @@ struct MetricKindTests {
             #expect(metric.styles.contains(metric.defaultStyle))
             #expect(metric.styles.contains(.number))
             #expect(metric.styles.contains(.speed) == metric.isThroughput)
-            #expect(metric.styles.contains(.gauge) == !metric.isThroughput)
+            #expect(metric.styles.contains(.gauge) == (!metric.isThroughput && metric != .temperature))
         }
-        #expect(MetricKind.allCases.count == 7)
+        #expect(MetricKind.allCases.count == 8)
     }
 
     @Test func shortTitlesAreTheMenuBarLabels() {
-        #expect(MetricKind.allCases.map(\.shortTitle) == ["CPU", "RAM", "GPU", "SSD", "I/O", "NET", "BAT"])
+        #expect(MetricKind.allCases.map(\.shortTitle) == ["CPU", "RAM", "GPU", "SSD", "I/O", "NET", "BAT", "TMP"])
     }
 }

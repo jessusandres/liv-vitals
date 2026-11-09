@@ -6,9 +6,13 @@ import LivCore
 nonisolated struct LiveMetrics: MetricsProviding {
     let isSimulated = false
 
-    func snapshots(every interval: Duration, includeProcesses: Bool) -> AsyncStream<MetricsSnapshot> {
+    func snapshots(every interval: Duration, includeProcesses: Bool, includeTemperature: Bool, includeGPUTemperature: Bool) -> AsyncStream<MetricsSnapshot> {
         MetricsMonitor.snapshots(
-            sampler: SystemSampler(processes: includeProcesses ? DefaultProcessSampler() : NullProcessSampler()),
+            sampler: SystemSampler(
+                processes: includeProcesses ? DefaultProcessSampler() : NullProcessSampler(),
+                temperatures: includeTemperature ? SMCTemperatureSampler() : nil,
+                gpuTemperature: includeGPUTemperature
+            ),
             every: interval,
             includeProcesses: includeProcesses
         )

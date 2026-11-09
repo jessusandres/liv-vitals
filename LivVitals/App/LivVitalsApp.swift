@@ -69,6 +69,7 @@ struct LivVitalsApp: App {
             IndicatorScene(store: store, metric: .diskActivity)
             IndicatorScene(store: store, metric: .network)
             IndicatorScene(store: store, metric: .battery)
+            IndicatorScene(store: store, metric: .temperature)
         }
 
         Window("About Liv Vitals", id: "about") {
