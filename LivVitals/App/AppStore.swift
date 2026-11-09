@@ -51,7 +51,11 @@ final class AppStore {
 
     /// Menu bar indicators need readings even with no window open; `MonitorModel` samples slowly and without `top` for them.
     func syncIndicatorSampling() {
-        monitor.setIndicatorRefresh(seconds: settings.enabledIndicators.isEmpty ? nil : settings.indicatorRefresh)
+        monitor.setIndicatorRefresh(
+            seconds: settings.enabledIndicators.isEmpty ? nil : settings.indicatorRefresh,
+            temperature: settings.indicator(.temperature).enabled || settings.indicator(.cpu).wantsTemperature || settings.indicator(.gpu).wantsTemperature,
+            gpuTemperature: settings.indicator(.gpu).wantsTemperature
+        )
     }
 
     /// A module the menu bar asked for ("Open Liv Vitals", "Configure…"); the main window takes it and clears it.

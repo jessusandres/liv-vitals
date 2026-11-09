@@ -129,6 +129,8 @@ public struct RawMetrics: Sendable, Equatable {
     public var gpu: GPUReading?
     /// Bytes moved since boot per storage driver; nil when none is readable.
     public var diskCounters: [UInt64: DiskIOCounter]?
+    /// nil unless temperature sensing was asked for and the machine answered.
+    public var temperature: TemperatureReading?
 
     public init(
         date: Date,
@@ -139,7 +141,8 @@ public struct RawMetrics: Sendable, Equatable {
         battery: BatteryReading?,
         processes: [ProcessUsage],
         gpu: GPUReading? = nil,
-        diskCounters: [UInt64: DiskIOCounter]? = nil
+        diskCounters: [UInt64: DiskIOCounter]? = nil,
+        temperature: TemperatureReading? = nil
     ) {
         self.date = date
         self.cpuTicks = cpuTicks
@@ -150,6 +153,7 @@ public struct RawMetrics: Sendable, Equatable {
         self.processes = processes
         self.gpu = gpu
         self.diskCounters = diskCounters
+        self.temperature = temperature
     }
 }
 
@@ -171,6 +175,9 @@ public struct MetricsSnapshot: Sendable, Equatable {
     public var health: Int
     public var gpu: GPUReading?
     public var diskActivity: DiskActivityReading?
+    public var temperature: TemperatureReading?
+    /// The processes using the most memory, most first.
+    public var topMemoryProcesses: [ProcessUsage]
 
     public init(
         date: Date,
@@ -184,7 +191,9 @@ public struct MetricsSnapshot: Sendable, Equatable {
         topProcesses: [ProcessUsage],
         health: Int,
         gpu: GPUReading? = nil,
-        diskActivity: DiskActivityReading? = nil
+        diskActivity: DiskActivityReading? = nil,
+        temperature: TemperatureReading? = nil,
+        topMemoryProcesses: [ProcessUsage] = []
     ) {
         self.date = date
         self.cpu = cpu
@@ -198,6 +207,8 @@ public struct MetricsSnapshot: Sendable, Equatable {
         self.health = health
         self.gpu = gpu
         self.diskActivity = diskActivity
+        self.temperature = temperature
+        self.topMemoryProcesses = topMemoryProcesses
     }
 }
 

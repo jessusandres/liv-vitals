@@ -11,6 +11,8 @@ enum DebugSnapshots {
         let module: AppModule
         /// Simulated unless a scenario asks for something real, e.g. the live Monitor.
         var services: ServiceContainer = .mock
+        /// Renders this menu bar panel at its own size instead of the whole window.
+        var panel: MetricKind?
         var prepare: @MainActor (AppStore) async -> Void = { _ in }
         /// Renders this instead of the whole window, for views that only exist in a sheet. Declared after
         /// `prepare` so a trailing closure still means `prepare`.
@@ -112,6 +114,12 @@ enum DebugSnapshots {
             if let largest = store.spaceLens.root?.children.first { store.spaceLens.open(largest) }
             await wait(0.6)
         },
+        Scenario(name: "08c-panel-cpu", module: .monitor, panel: .cpu) { store in await openPanel(store) },
+        Scenario(name: "08d-panel-cpu-open", module: .monitor, panel: .cpu) { store in await openPanel(store, sections: ["cpu.apps"]) },
+        Scenario(name: "08e-panel-memory", module: .monitor, panel: .memory) { store in await openPanel(store) },
+        Scenario(name: "08f-panel-memory-open", module: .monitor, panel: .memory) { store in await openPanel(store, sections: ["memory.apps"]) },
+        Scenario(name: "08g-panel-temperature", module: .monitor, panel: .temperature) { store in await openPanel(store) },
+        Scenario(name: "08h-panel-temperature-open", module: .monitor, panel: .temperature) { store in await openPanel(store, sections: ["temperature.sensors"]) },
         Scenario(name: "08-monitor", module: .monitor) { store in
             store.monitor.start()
             await wait(0.3)
@@ -158,6 +166,13 @@ enum DebugSnapshots {
         }),
     ]
 
+    private static func openPanel(_ store: AppStore, sections: Set<String> = []) async {
+        store.monitor.setIndicatorRefresh(seconds: 2, temperature: true)
+        store.monitor.start()
+        store.monitor.expandedPanelSections = sections
+        await wait(2)
+    }
+
     private static func onboarding(_ step: OnboardingModel.Step) -> @MainActor () -> AnyView {
         {
             let store = AppStore(services: .mock)
@@ -186,9 +201,12 @@ enum DebugSnapshots {
     }
 
     private static func render(_ scenario: Scenario, store: AppStore, appearance: NSAppearance.Name, to url: URL) async {
-        let host = NSHostingView(rootView: scenario.view?() ?? AnyView(RootView(selection: scenario.module, store: store)))
+        let root = scenario.panel.map { AnyView(IndicatorPanelView(store: store, metric: $0).background(.background)) }
+            ?? scenario.view?()
+            ?? AnyView(RootView(selection: scenario.module, store: store))
+        let host = NSHostingView(rootView: root)
         let window = NSWindow(
-            contentRect: CGRect(origin: CGPoint(x: -10_000, y: -10_000), size: size),
+            contentRect: CGRect(origin: CGPoint(x: -10_000, y: -10_000), size: scenario.panel == nil ? size : host.fittingSize),
             styleMask: [.titled, .fullSizeContentView],
             backing: .buffered,
             defer: false

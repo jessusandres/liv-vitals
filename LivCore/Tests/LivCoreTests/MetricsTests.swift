@@ -88,11 +88,18 @@ struct MetricsAggregatorTests {
         #expect(last.cpuAverage == 1)
     }
 
-    @Test func topProcessesAreTheFiveBusiest() {
+    @Test func topProcessesAreTheEightBusiest() {
         let processes = (1...7).map { ProcessUsage(pid: Int32($0), name: "p\($0)", cpuPercent: Double($0 * 10), memoryBytes: 1) }
         var aggregator = MetricsAggregator()
         let snapshot = aggregator.ingest(raw(processes: processes.shuffled()))
-        #expect(snapshot.topProcesses.map(\.pid) == [7, 6, 5, 4, 3])
+        #expect(snapshot.topProcesses.map(\.pid) == [7, 6, 5, 4, 3, 2, 1])
+    }
+
+    @Test func topMemoryProcessesAreTheEightBiggest() {
+        let processes = (1...10).map { ProcessUsage(pid: Int32($0), name: "p\($0)", cpuPercent: 1, memoryBytes: UInt64($0)) }
+        var aggregator = MetricsAggregator()
+        let snapshot = aggregator.ingest(raw(processes: processes.shuffled()))
+        #expect(snapshot.topMemoryProcesses.map(\.pid) == [10, 9, 8, 7, 6, 5, 4, 3])
     }
 
     @Test func healthComesFromTheAverageCpuPressureAndDisk() {

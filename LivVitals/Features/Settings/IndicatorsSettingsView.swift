@@ -48,7 +48,7 @@ private struct IndicatorRow: View {
                 IndicatorPreview(
                     image: IndicatorImageRenderer.image(
                         for: current,
-                        value: IndicatorFormatter.value(metric, from: monitor.latest),
+                        value: IndicatorFormatter.value(metric, from: monitor.latest, showTemperature: current.showTemperature),
                         history: monitor.series[metric] ?? []
                     )
                 )
@@ -73,6 +73,13 @@ private struct IndicatorRow: View {
                         set: { value in settings.updateIndicator(metric) { $0.showLabel = value } }
                     ))
                     .toggleStyle(.checkbox)
+                    if metric == .cpu || metric == .gpu {
+                        Toggle("Temperature", isOn: Binding(
+                            get: { current.showTemperature },
+                            set: { value in settings.updateIndicator(metric) { $0.showTemperature = value } }
+                        ))
+                        .toggleStyle(.checkbox)
+                    }
                 }
                 .padding(.leading, 28)
             }

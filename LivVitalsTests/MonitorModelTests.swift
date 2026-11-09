@@ -142,6 +142,33 @@ struct MonitorModelTests {
         #expect(!model.isSampling)
     }
 
+    @Test func temperatureIsRequestedOnlyWhileTheIndicatorIsOn() {
+        let (model, metrics) = makeModel()
+        model.setIndicatorRefresh(seconds: 2)
+        #expect(!metrics.requests[0].includeTemperature)
+
+        model.setIndicatorRefresh(seconds: 2, temperature: true)
+        #expect(metrics.requests.count == 2)
+        #expect(metrics.requests[1].includeTemperature)
+
+        model.setIndicatorRefresh(seconds: 2, temperature: true)
+        #expect(metrics.requests.count == 2)
+
+        model.start()
+        #expect(metrics.requests[2].includeProcesses)
+        #expect(metrics.requests[2].includeTemperature)
+        model.stop()
+        #expect(metrics.requests[3].includeTemperature)
+
+        model.setIndicatorRefresh(seconds: 2, temperature: true, gpuTemperature: true)
+        #expect(metrics.requests.count == 5)
+        #expect(metrics.requests[4].includeGPUTemperature)
+        model.setIndicatorRefresh(seconds: 2, temperature: false)
+        #expect(metrics.requests.count == 6)
+        #expect(!metrics.requests[5].includeTemperature)
+        model.setIndicatorRefresh(seconds: nil)
+    }
+
     @Test func changingTheRefreshRestartsTheStreamOnlyWhenItDiffers() {
         let (model, metrics) = makeModel()
         model.setIndicatorRefresh(seconds: 2)

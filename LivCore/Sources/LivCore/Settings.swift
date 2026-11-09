@@ -13,7 +13,7 @@ public struct Settings: Codable, Equatable, Sendable {
     /// the menu bar icon is shown, since it is then the way back in.
     public var hideFromDockWhenClosed = true
     public var hasCompletedOnboarding = false
-    /// Menu bar indicators (Stage 10): all seven metrics, each off until the user turns it on.
+    /// Menu bar indicators (Stage 10): all eight metrics, each off until the user turns it on.
     public var indicators: [IndicatorSetting] = IndicatorSetting.defaults
     /// Seconds between readings while an indicator is showing; one of `IndicatorSetting.refreshChoices`.
     public var indicatorRefresh = IndicatorSetting.defaultRefresh

@@ -48,6 +48,7 @@ extension MetricKind {
         case .diskActivity: Color(red: 0.93, green: 0.48, blue: 0.26)
         case .network: Color(red: 0.18, green: 0.62, blue: 0.96)
         case .battery: Color(red: 0.13, green: 0.71, blue: 0.62)
+        case .temperature: Color(red: 0.96, green: 0.45, blue: 0.2)
         }
     }
 }
@@ -98,7 +99,7 @@ enum IndicatorImageRenderer {
 
 /// What goes into one indicator, left to right, and how wide it is.
 private struct IndicatorLayout: @unchecked Sendable {
-    enum Part {
+    indirect enum Part {
         case symbol(String)
         case label(NSAttributedString)
         case text(NSAttributedString)
@@ -106,6 +107,8 @@ private struct IndicatorLayout: @unchecked Sendable {
         case chart([Double], ceiling: Double)
         case bars(Double)
         case gauge(Double)
+        /// A small label centered above a row of parts, both inside the menu bar height.
+        case stack(NSAttributedString, [Part])
     }
 
     private(set) var parts: [Part] = []
@@ -115,18 +118,31 @@ private struct IndicatorLayout: @unchecked Sendable {
         var parts: [Part] = []
         if setting.style == .icon || setting.showIcon { parts.append(.symbol(setting.metric.symbol)) }
         if setting.style != .icon {
-            if setting.showLabel {
-                parts.append(.label(Self.attributed(setting.metric.shortTitle, NSFont.systemFont(ofSize: 8, weight: .bold), alpha: 0.7)))
+            // The speed style already uses both lines, so its label stays on the left.
+            let stacked = setting.showLabel && setting.style != .speed
+            var row = [Self.content(setting: setting, value: value, history: history, stacked: stacked)]
+            if setting.style != .number, let temperature = value.temperatureText, value.isAvailable {
+                row.append(.text(Self.attributed(temperature, Self.numberFont(stacked: stacked))))
             }
-            parts.append(Self.content(setting: setting, value: value, history: history))
+            if stacked {
+                parts.append(.stack(Self.attributed(setting.metric.shortTitle, NSFont.systemFont(ofSize: 7.5, weight: .bold), alpha: 0.7), row))
+            } else {
+                if setting.showLabel {
+                    parts.append(.label(Self.attributed(setting.metric.shortTitle, NSFont.systemFont(ofSize: 8, weight: .bold), alpha: 0.7)))
+                }
+                parts += row
+            }
         }
         self.parts = parts
-        let inner = parts.map(Self.width(of:)).reduce(0, +) + IndicatorGeometry.spacing * CGFloat(max(0, parts.count - 1))
-        width = ceil(inner + IndicatorGeometry.padding * 2)
+        width = ceil(Self.rowWidth(parts) + IndicatorGeometry.padding * 2)
     }
 
-    private static func content(setting: IndicatorSetting, value: IndicatorValue, history: [Double]) -> Part {
-        let number = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+    private static func numberFont(stacked: Bool) -> NSFont {
+        NSFont.monospacedDigitSystemFont(ofSize: stacked ? 11 : 12, weight: .medium)
+    }
+
+    private static func content(setting: IndicatorSetting, value: IndicatorValue, history: [Double], stacked: Bool) -> Part {
+        let number = numberFont(stacked: stacked)
         guard value.isAvailable else { return .text(attributed(IndicatorFormatter.missing, number)) }
         switch setting.style {
         case .number, .icon:
@@ -147,6 +163,10 @@ private struct IndicatorLayout: @unchecked Sendable {
         NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.black.withAlphaComponent(alpha)])
     }
 
+    private static func rowWidth(_ parts: [Part]) -> CGFloat {
+        parts.map(width(of:)).reduce(0, +) + IndicatorGeometry.spacing * CGFloat(max(0, parts.count - 1))
+    }
+
     private static func width(of part: Part) -> CGFloat {
         switch part {
         case .symbol: 14
@@ -155,19 +175,24 @@ private struct IndicatorLayout: @unchecked Sendable {
         case .chart: IndicatorGeometry.chartSize.width
         case .bars: IndicatorGeometry.barSize.width
         case .gauge: IndicatorGeometry.gaugeDiameter
+        case .stack(let label, let row): max(ceil(label.size().width), rowWidth(row))
         }
     }
 
     func draw(color: NSColor) {
-        var x = IndicatorGeometry.padding
+        Self.drawRow(parts, in: CGRect(x: IndicatorGeometry.padding, y: 0, width: width, height: IndicatorGeometry.height), color: color)
+    }
+
+    private static func drawRow(_ parts: [Part], in rect: CGRect, color: NSColor) {
+        var x = rect.minX
         for part in parts {
-            let partWidth = Self.width(of: part)
-            draw(part, in: CGRect(x: x, y: 0, width: partWidth, height: IndicatorGeometry.height), color: color)
+            let partWidth = width(of: part)
+            draw(part, in: CGRect(x: x, y: rect.minY, width: partWidth, height: rect.height), color: color)
             x += partWidth + IndicatorGeometry.spacing
         }
     }
 
-    private func draw(_ part: Part, in rect: CGRect, color: NSColor) {
+    private static func draw(_ part: Part, in rect: CGRect, color: NSColor) {
         switch part {
         case .symbol(let name):
             let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium).applying(.init(paletteColors: [color]))
@@ -177,6 +202,13 @@ private struct IndicatorLayout: @unchecked Sendable {
             }
         case .label(let text), .text(let text):
             Self.drawText(text, color: color, in: rect, alignRight: false)
+        case .stack(let label, let row):
+            // The label takes the top 8.5 pt, the row the rest; each is centered in the part's width.
+            let top = rect.maxY - 8.5
+            let labelWidth = ceil(label.size().width)
+            Self.drawText(label, color: color, in: CGRect(x: rect.minX + (rect.width - labelWidth) / 2, y: top, width: labelWidth, height: 8.5), alignRight: false)
+            let rowWidth = Self.rowWidth(row)
+            Self.drawRow(row, in: CGRect(x: rect.minX + (rect.width - rowWidth) / 2, y: rect.minY, width: rowWidth, height: top - rect.minY + 0.5), color: color)
         case .speed(let first, let second):
             if let second {
                 Self.drawText(first, color: color, in: CGRect(x: rect.minX, y: rect.midY - 1, width: rect.width, height: 10), alignRight: true)
@@ -185,7 +217,8 @@ private struct IndicatorLayout: @unchecked Sendable {
                 Self.drawText(first, color: color, in: rect, alignRight: true)
             }
         case .chart(let values, let ceiling):
-            let box = CGRect(x: rect.minX, y: rect.midY - IndicatorGeometry.chartSize.height / 2, width: rect.width, height: IndicatorGeometry.chartSize.height)
+            let chartHeight = min(IndicatorGeometry.chartSize.height, rect.height)
+            let box = CGRect(x: rect.minX, y: rect.midY - chartHeight / 2, width: rect.width, height: chartHeight)
             let points = IndicatorGeometry.sparkline(values: values, ceiling: ceiling, in: box.size)
             guard let first = points.first else { return }
             let path = NSBezierPath()
@@ -207,7 +240,7 @@ private struct IndicatorLayout: @unchecked Sendable {
                 NSBezierPath(roundedRect: fill, xRadius: box.height / 2, yRadius: box.height / 2).fill()
             }
         case .gauge(let fraction):
-            let diameter = IndicatorGeometry.gaugeDiameter
+            let diameter = min(IndicatorGeometry.gaugeDiameter, rect.height)
             let box = CGRect(x: rect.midX - diameter / 2, y: rect.midY - diameter / 2, width: diameter, height: diameter).insetBy(dx: 1.25, dy: 1.25)
             let center = CGPoint(x: box.midX, y: box.midY)
             let track = NSBezierPath()

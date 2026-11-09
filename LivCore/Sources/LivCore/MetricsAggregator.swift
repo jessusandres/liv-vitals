@@ -3,7 +3,7 @@ import Foundation
 /// Turns a stream of `RawMetrics` into `MetricsSnapshot`s by comparing each reading with the one before.
 public struct MetricsAggregator: Sendable {
     private static let averageWindow = 10
-    private static let processCount = 5
+    private static let processCount = 8
 
     private var previous: RawMetrics?
     private var cpu = 0.0
@@ -55,7 +55,9 @@ public struct MetricsAggregator: Sendable {
             topProcesses: Array(raw.processes.sorted { $0.cpuPercent > $1.cpuPercent }.prefix(Self.processCount)),
             health: HealthScore.compute(cpu: average, memoryPressure: raw.memory.pressure, diskUsedFraction: raw.disk.usedFraction),
             gpu: raw.gpu,
-            diskActivity: diskActivity
+            diskActivity: diskActivity,
+            temperature: raw.temperature,
+            topMemoryProcesses: Array(raw.processes.sorted { $0.memoryBytes > $1.memoryBytes }.prefix(Self.processCount))
         )
     }
 
