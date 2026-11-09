@@ -95,6 +95,10 @@ struct IndicatorPanelView: View {
         .frame(width: 340)
         .onAppear(perform: monitor.start)
         .onDisappear(perform: monitor.stop)
+        // Runs nettop only while the NET panel is open with "Top apps" expanded; either change cancels it.
+        .task(id: metric == .network && monitor.expandedPanelSections.contains("network.apps")) {
+            if metric == .network, monitor.expandedPanelSections.contains("network.apps") { await monitor.sampleNetworkApps() }
+        }
     }
 
     private func open(_ module: AppModule) {
@@ -194,10 +198,16 @@ struct IndicatorPanelView: View {
         case .network:
             row("Download", monitor.downloadText)
             row("Upload", monitor.uploadText)
-            section("minute", "Last minute") {
-                let values = monitor.series[.network] ?? []
-                row("Peak", IndicatorFormatter.rate(values.max() ?? 0))
-                row("Average", IndicatorFormatter.rate(values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)))
+            section("apps", "Top apps") { networkAppList }
+            section("details", "Details") {
+                let interface = snapshot?.networkInterface
+                row("Interface", interface.map(interfaceTitle) ?? "—")
+                row("IP address", interface?.ipv4 ?? "—")
+                row("Downloaded", ByteCountFormatter.string(fromByteCount: Int64(clamping: monitor.sessionReceived), countStyle: .decimal))
+                row("Uploaded", ByteCountFormatter.string(fromByteCount: Int64(clamping: monitor.sessionSent), countStyle: .decimal))
+                // The series hold MB/s.
+                row("Peak ↓", MonitorModel.rateText((monitor.download.map(\.value).max() ?? 0) * 1e6))
+                row("Peak ↑", MonitorModel.rateText((monitor.upload.map(\.value).max() ?? 0) * 1e6))
             }
         case .battery:
             if let battery = snapshot?.battery {
@@ -262,6 +272,38 @@ struct IndicatorPanelView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func interfaceTitle(_ interface: NetworkInterfaceInfo) -> String {
+        switch interface.kind {
+        case .wifi: String(localized: "Wi-Fi")
+        case .ethernet: String(localized: "Ethernet")
+        case .vpn: String(localized: "VPN")
+        case .other: interface.bsdName
+        }
+    }
+
+    /// Per-app traffic, sampled only while this fold is open (see the `.task` on the panel).
+    @ViewBuilder private var networkAppList: some View {
+        if monitor.networkAppsFailed {
+            Text("Per-app traffic is unavailable.").foregroundStyle(.secondary)
+        } else if let apps = monitor.networkApps {
+            if apps.isEmpty { Text("No network activity").foregroundStyle(.secondary) }
+            ForEach(apps) { app in
+                let text = "↓ \(IndicatorFormatter.rate(app.bytesInPerSecond))  ↑ \(IndicatorFormatter.rate(app.bytesOutPerSecond))"
+                let spoken = "\(app.name), download \(IndicatorFormatter.rate(app.bytesInPerSecond, spoken: true)), upload \(IndicatorFormatter.rate(app.bytesOutPerSecond, spoken: true))"
+                HStack(spacing: 8) {
+                    SystemIcon(image: monitor.icons.icon(for: ProcessUsage(pid: app.pid, name: app.name, cpuPercent: 0, memoryBytes: 0)), size: 16)
+                    Text(app.name).lineLimit(1)
+                    Spacer()
+                    Text(text).monospacedDigit().foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken)
+            }
+        } else {
+            Text("Loading…").foregroundStyle(.secondary)
         }
     }
 

@@ -15,6 +15,8 @@ public struct MetricsAggregator: Sendable {
     public mutating func ingest(_ raw: RawMetrics) -> MetricsSnapshot {
         var download = 0.0
         var upload = 0.0
+        var received: UInt64 = 0
+        var sent: UInt64 = 0
         var diskActivity: DiskActivityReading?
 
         if let previous {
@@ -25,6 +27,8 @@ public struct MetricsAggregator: Sendable {
 
             let seconds = raw.date.timeIntervalSince(previous.date)
             if seconds > 0 {
+                received = Self.moved(from: previous.network.bytesIn, to: raw.network.bytesIn)
+                sent = Self.moved(from: previous.network.bytesOut, to: raw.network.bytesOut)
                 download = Self.rate(from: previous.network.bytesIn, to: raw.network.bytesIn, over: seconds)
                 upload = Self.rate(from: previous.network.bytesOut, to: raw.network.bytesOut, over: seconds)
                 if let now = raw.diskCounters, let before = previous.diskCounters {
@@ -57,9 +61,14 @@ public struct MetricsAggregator: Sendable {
             gpu: raw.gpu,
             diskActivity: diskActivity,
             temperature: raw.temperature,
-            topMemoryProcesses: Array(raw.processes.sorted { $0.memoryBytes > $1.memoryBytes }.prefix(Self.processCount))
+            topMemoryProcesses: Array(raw.processes.sorted { $0.memoryBytes > $1.memoryBytes }.prefix(Self.processCount)),
+            networkInterface: raw.networkInterface,
+            receivedBytes: received,
+            sentBytes: sent
         )
     }
+
+    private static func moved(from old: UInt64, to new: UInt64) -> UInt64 { new >= old ? new - old : 0 }
 
     /// Bytes per second. A counter that went down (an interface reset) counts as no traffic.
     private static func rate(from old: UInt64, to new: UInt64, over seconds: TimeInterval) -> Double {

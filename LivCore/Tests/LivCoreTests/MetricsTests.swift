@@ -68,6 +68,17 @@ struct MetricsAggregatorTests {
         #expect(snapshot.uploadBytesPerSecond == 0)
     }
 
+    @Test func movedBytesMatchTheCounterDeltaAndAResetCountsAsZero() {
+        var aggregator = MetricsAggregator()
+        _ = aggregator.ingest(raw(at: 0, bytesIn: 1_000, bytesOut: 9_000))
+        let grew = aggregator.ingest(raw(at: 1, bytesIn: 1_600, bytesOut: 9_100))
+        #expect(grew.receivedBytes == 600)
+        #expect(grew.sentBytes == 100)
+        let reset = aggregator.ingest(raw(at: 2, bytesIn: 50, bytesOut: 10))
+        #expect(reset.receivedBytes == 0)
+        #expect(reset.sentBytes == 0)
+    }
+
     @Test func aClockThatDidNotAdvanceGivesNoNetworkRate() {
         var aggregator = MetricsAggregator()
         _ = aggregator.ingest(raw(at: 5, bytesIn: 0))

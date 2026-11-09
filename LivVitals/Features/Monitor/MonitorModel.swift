@@ -31,9 +31,48 @@ final class MonitorModel {
     @ObservationIgnored private var work: Task<Void, Never>?
     @ObservationIgnored private var sampleCount = 0
     @ObservationIgnored let icons = ProcessIconCache()
+    @ObservationIgnored private let commands: any CommandRunning
+    @ObservationIgnored var networkAppsInterval: Duration = .seconds(1)
+    @ObservationIgnored private var networkAppsRun = 0
 
-    init(service: any MetricsProviding) {
+    /// The busiest apps on the network; nil means the first reading is still to come.
+    private(set) var networkApps: [NetworkAppUsage]?
+    private(set) var networkAppsFailed = false
+    /// Bytes moved since the app started sampling.
+    // shortcut: each stream's first snapshot is skipped, so this undercounts about 1 s per mode switch.
+    private(set) var sessionReceived: UInt64 = 0
+    private(set) var sessionSent: UInt64 = 0
+
+    init(service: any MetricsProviding, commands: any CommandRunning = ProcessCommandRunner()) {
         self.service = service
+        self.commands = commands
+    }
+
+    /// Reads per-app traffic from `nettop` about once a second until the calling task is cancelled. The panel runs it
+    /// only while the "Top apps" fold is open. Cumulative counters (`-L 1`) are cheap; `-d` costs over a second of CPU.
+    func sampleNetworkApps() async {
+        guard !service.isSimulated else { networkApps = []; return }
+        var tracker = NetworkAppRates()
+        networkAppsRun += 1
+        let run = networkAppsRun
+        // `.task(id:)` starts a new run before the cancelled one returns; only the latest run may clear the list.
+        defer { if networkAppsRun == run { networkApps = nil; networkAppsFailed = false } }
+        while !Task.isCancelled {
+            do {
+                let result = try await commands.run("/usr/bin/nettop", ["-P", "-L", "1", "-n", "-x", "-J", "bytes_in,bytes_out"], timeout: .seconds(2))
+                if result.status == 0, !result.output.isEmpty {
+                    networkAppsFailed = false
+                    if let rows = tracker.rates(cumulative: NettopParser.parse(result.output), at: .now) { networkApps = rows }
+                } else {
+                    networkAppsFailed = true
+                }
+            } catch is CancellationError {
+                break
+            } catch {
+                networkAppsFailed = true
+            }
+            try? await Task.sleep(for: networkAppsInterval)
+        }
     }
 
     // MARK: - Watching
@@ -110,7 +149,11 @@ final class MonitorModel {
     private func apply(_ snapshot: MetricsSnapshot) {
         latest = snapshot
         // Light readings carry no processes; keep the last list instead of emptying the Monitor between two modes.
-        if !snapshot.topProcesses.isEmpty { icons.keep(only: Set((snapshot.topProcesses + snapshot.topMemoryProcesses).map(\.pid))) }
+        if !snapshot.topProcesses.isEmpty {
+            icons.keep(only: Set((snapshot.topProcesses + snapshot.topMemoryProcesses).map(\.pid) + (networkApps ?? []).map(\.pid)))
+        }
+        sessionReceived += snapshot.receivedBytes
+        sessionSent += snapshot.sentBytes
         sampleCount += 1
         append(&cpu, snapshot.cpu * 100)
         append(&download, snapshot.downloadBytesPerSecond / 1_000_000)

@@ -131,6 +131,8 @@ public struct RawMetrics: Sendable, Equatable {
     public var diskCounters: [UInt64: DiskIOCounter]?
     /// nil unless temperature sensing was asked for and the machine answered.
     public var temperature: TemperatureReading?
+    /// nil unless asked for (panels and windows) or when offline.
+    public var networkInterface: NetworkInterfaceInfo?
 
     public init(
         date: Date,
@@ -142,7 +144,8 @@ public struct RawMetrics: Sendable, Equatable {
         processes: [ProcessUsage],
         gpu: GPUReading? = nil,
         diskCounters: [UInt64: DiskIOCounter]? = nil,
-        temperature: TemperatureReading? = nil
+        temperature: TemperatureReading? = nil,
+        networkInterface: NetworkInterfaceInfo? = nil
     ) {
         self.date = date
         self.cpuTicks = cpuTicks
@@ -154,6 +157,7 @@ public struct RawMetrics: Sendable, Equatable {
         self.gpu = gpu
         self.diskCounters = diskCounters
         self.temperature = temperature
+        self.networkInterface = networkInterface
     }
 }
 
@@ -178,6 +182,10 @@ public struct MetricsSnapshot: Sendable, Equatable {
     public var temperature: TemperatureReading?
     /// The processes using the most memory, most first.
     public var topMemoryProcesses: [ProcessUsage]
+    public var networkInterface: NetworkInterfaceInfo?
+    /// Bytes moved since the previous reading; a counter reset counts as 0.
+    public var receivedBytes: UInt64
+    public var sentBytes: UInt64
 
     public init(
         date: Date,
@@ -193,7 +201,10 @@ public struct MetricsSnapshot: Sendable, Equatable {
         gpu: GPUReading? = nil,
         diskActivity: DiskActivityReading? = nil,
         temperature: TemperatureReading? = nil,
-        topMemoryProcesses: [ProcessUsage] = []
+        topMemoryProcesses: [ProcessUsage] = [],
+        networkInterface: NetworkInterfaceInfo? = nil,
+        receivedBytes: UInt64 = 0,
+        sentBytes: UInt64 = 0
     ) {
         self.date = date
         self.cpu = cpu
@@ -209,6 +220,9 @@ public struct MetricsSnapshot: Sendable, Equatable {
         self.diskActivity = diskActivity
         self.temperature = temperature
         self.topMemoryProcesses = topMemoryProcesses
+        self.networkInterface = networkInterface
+        self.receivedBytes = receivedBytes
+        self.sentBytes = sentBytes
     }
 }
 

@@ -9,6 +9,33 @@ struct MonitorModelTests {
         (MonitorModel(service: metrics), metrics)
     }
 
+    private func nettop(_ lines: String) -> CommandResult { CommandResult(status: 0, output: ",bytes_in,bytes_out,\n" + lines) }
+
+    @Test func topAppsSamplingGivesRatesAndStopsWhenCancelled() async {
+        let commands = FakeCommands(sequences: ["/usr/bin/nettop": [nettop("a.1,1000,0,\n"), nettop("a.1,3000,500,\n")]])
+        let model = MonitorModel(service: FakeMetrics(), commands: commands)
+        model.networkAppsInterval = .milliseconds(20)
+        let task = Task { await model.sampleNetworkApps() }
+        #expect(await waitUntil { model.networkApps?.first?.name == "a" })
+        #expect(commands.calls.first == "/usr/bin/nettop -P -L 1 -n -x -J bytes_in,bytes_out")
+        task.cancel()
+        await task.value
+        #expect(model.networkApps == nil)
+        let calls = commands.calls.count
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(commands.calls.count == calls)
+    }
+
+    @Test func aFailingNettopSetsTheFailedFlag() async {
+        let commands = FakeCommands(throwing: ["/usr/bin/nettop"])
+        let model = MonitorModel(service: FakeMetrics(), commands: commands)
+        model.networkAppsInterval = .milliseconds(20)
+        let task = Task { await model.sampleNetworkApps() }
+        #expect(await waitUntil { model.networkAppsFailed })
+        task.cancel()
+        await task.value
+    }
+
     @Test func nothingIsSampledUntilSomeoneWatches() {
         let (model, metrics) = makeModel()
         #expect(!model.isSampling)
